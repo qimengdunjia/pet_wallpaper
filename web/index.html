@@ -1,0 +1,235 @@
+<!doctype html>
+<!-- 文件用途：提供原始宠物照上传、待机图生成与结果复用入口。 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="上传宠物正面照，生成车机待机图或追逐过场关键帧。">
+  <title>图生图 · 宠物壁纸测试台</title>
+  <link rel="icon" href="/assets/paw.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body data-job-kind="image">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/" title="宠物壁纸测试台">
+        <img src="/assets/paw.svg" alt="" width="28" height="28">
+        <span>宠物壁纸测试台</span>
+        <span id="service-pill" class="service-pill" aria-live="polite">连接中…</span>
+      </a>
+      <nav class="lab-tabs" aria-label="功能切换">
+        <a href="/image-to-image" aria-current="page">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          图生图
+        </a>
+        <a href="/image-to-video">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
+          图生视频
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div id="config-notice" class="notice" hidden></div>
+    <div id="alert" class="notice error" role="alert" hidden></div>
+
+    <div class="lab-layout">
+      <!-- 左侧创作控制面板 -->
+      <section class="lab-panel" aria-labelledby="panel-title">
+        <div class="panel-header">
+          <h1 id="panel-title">图生图</h1>
+          <p class="panel-subtitle">生成 16:9 车机待机图或过场关键帧</p>
+        </div>
+
+        <!-- 1. 场景预设 -->
+        <div class="panel-block">
+          <div class="block-label-row">
+            <span class="block-label">生成场景</span>
+          </div>
+          <select id="image-preset" hidden aria-hidden="true">
+            <option value="">自定义 · 批量出图</option>
+          </select>
+          <div id="preset-categories" class="segmented-bar" role="group" aria-label="生成场景分类"></div>
+          <div id="preset-subpills" class="subpill-row" role="group" aria-label="预设方案" hidden></div>
+        </div>
+
+        <!-- 2. 参考图上传 -->
+        <div class="panel-block">
+          <div class="block-label-row">
+            <h2 class="block-label" id="upload-heading">主体参考图</h2>
+            <span id="reference-count" class="count-pill" aria-live="polite"></span>
+          </div>
+
+          <label class="dropzone" id="dropzone" for="photo">
+            <input id="photo" type="file" accept="image/jpeg,image/png" multiple aria-label="添加主体参考图" aria-describedby="reference-count">
+            <img id="single-preview" alt="已选宠物原照" hidden>
+            <span class="upload-icon" aria-hidden="true">＋</span>
+            <strong id="images-label">点击、拖拽或 Ctrl+V 粘贴宠物正面照</strong>
+            <span id="images-help" class="upload-help">JPG / PNG · 单张 ≤ 10 MB · 宽高 ≥ 300 px</span>
+            <div id="single-actions" class="dropzone-actions" hidden>
+              <button type="button" class="mini-pill-btn" id="replace-single">更换</button>
+              <button type="button" class="mini-pill-btn danger" id="clear-single" aria-label="移除原图">移除</button>
+            </div>
+          </label>
+
+          <ol id="reference-draft" class="reference-list" aria-label="已选主体图" hidden></ol>
+
+          <!-- 可选姿态风格底图（仅自定义批量模式可见） -->
+          <div id="style-settings" class="style-strip">
+            <label class="style-drop" id="style-dropzone" for="style-photo">
+              <input id="style-photo" type="file" accept="image/jpeg,image/png" aria-label="添加姿态风格参考图">
+              <img id="style-preview" alt="姿态风格参考图" hidden>
+              <span class="style-drop-icon" aria-hidden="true">＋</span>
+              <span id="style-label" class="style-drop-text">添加姿态风格底图（可选 · 整批共用）</span>
+            </label>
+            <button id="clear-style" class="mini-pill-btn danger" type="button" hidden>移除</button>
+          </div>
+
+          <div id="image-model-warning" class="inline-fix-banner" role="status" hidden>
+            <span id="image-model-warning-text">当前模型不支持多图或风格底图参考</span>
+            <button id="fix-image-model" class="mini-pill-btn primary-soft" type="button">切换为 Image 3.0 Omni</button>
+          </div>
+        </div>
+
+        <!-- 3. 提示词 -->
+        <div class="panel-block">
+          <div class="block-label-row">
+            <label class="block-label" for="prompt">
+              提示词
+              <span id="prompt-dirty" class="dirty-tag" hidden>已修改</span>
+            </label>
+            <div class="prompt-tools">
+              <button type="button" class="text-button" id="btn-reset-prompt" title="恢复该预设默认提示词" hidden>恢复默认</button>
+              <button type="button" class="text-button" id="btn-copy-prompt" title="复制提示词">复制</button>
+              <button type="button" class="text-button" id="btn-clear-prompt" title="清空提示词">清空</button>
+              <span id="prompt-counter" class="prompt-counter">0/2500</span>
+            </div>
+          </div>
+          <textarea id="prompt" class="prompt-input" maxlength="2500" rows="4" placeholder="描述宠物姿态、构图、光照与背景…"></textarea>
+
+          <div class="prompt-actions">
+            <div class="prompt-actions-left">
+              <button id="prompt-update" class="secondary-sm" type="button" hidden>保存修改</button>
+              <button id="prompt-save-as" class="text-button" type="button" disabled>保存为预设</button>
+            </div>
+            <p id="prompt-save-status" class="prompt-save-status" role="status" hidden></p>
+          </div>
+
+          <form id="prompt-save-form" class="prompt-save-form" hidden>
+            <input id="prompt-preset-name" type="text" placeholder="输入新预设名称，如：布偶猫待机" required maxlength="60" aria-label="新建预设名称">
+            <button id="prompt-save-confirm" class="secondary-sm" type="submit">保存</button>
+            <button id="prompt-save-cancel" class="text-button" type="button">取消</button>
+          </form>
+        </div>
+
+        <!-- 4. 生成参数（默认收起展示摘要） -->
+        <div class="panel-block">
+          <details id="image-options-panel" class="options-accordion">
+            <summary class="options-summary">
+              <span class="options-summary-title">模型与画幅</span>
+              <span id="image-options-summary" class="options-summary-value">Image 3.0 Omni · 2K · 16:9</span>
+            </summary>
+            <fieldset id="image-options" class="generation-options" disabled>
+              <div class="generation-options-grid">
+                <label>图片模型<select id="image-model"></select></label>
+                <label>分辨率<select id="image-resolution"></select></label>
+                <label>画幅比例<select id="image-aspect-ratio"></select></label>
+              </div>
+            </fieldset>
+          </details>
+        </div>
+
+        <!-- 5. 提交 -->
+        <div class="panel-submit">
+          <p id="submit-hint" class="submit-hint" hidden></p>
+          <button class="primary" id="start" disabled>生成待机图</button>
+          <p id="image-credit-note" class="credit-note">每次提交按可灵账户额度生成</p>
+        </div>
+      </section>
+
+      <!-- 右侧成果与状态面板 -->
+      <section class="lab-panel lab-output" aria-labelledby="results-heading">
+        <div class="output-toolbar">
+          <div class="status-inline">
+            <span id="status-dot" class="status-dot"></span>
+            <div class="status-copy">
+              <div class="status-line">
+                <h2 id="results-heading" class="sr-only">生成结果</h2>
+                <strong id="status-title" role="status" aria-live="polite">等待上传原照</strong>
+                <span id="status-timer" class="status-timer" hidden></span>
+              </div>
+              <p id="status-detail" class="status-detail"></p>
+            </div>
+            <button id="retry" class="secondary-sm" hidden>重试</button>
+          </div>
+          <label class="history-label">
+            <span class="sr-only">测试记录</span>
+            <select id="history" aria-label="切换测试记录">
+              <option value="">暂无记录</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- 任务核对面板 -->
+        <div id="review" class="review" hidden>
+          <strong>提交结果待核对</strong>
+          <p>请在可灵控制台确认任务是否已创建。若已有任务可绑定 ID 继续查询，避免重复付费。</p>
+          <div class="review-controls">
+            <input id="provider-id" placeholder="输入可灵任务 ID" aria-label="供应商任务 ID" maxlength="128">
+            <button id="bind-task" class="secondary-sm">绑定并查询</button>
+            <button id="not-created" class="text-button">已核对，未创建</button>
+          </div>
+        </div>
+
+        <!-- 批量结果缩略图 -->
+        <section id="image-batch" class="image-batch" aria-label="本批生成结果" hidden>
+          <div class="batch-header">
+            <strong>本批进度</strong>
+            <span id="batch-summary" class="count-pill" aria-live="polite"></span>
+          </div>
+          <ol id="batch-results" class="batch-grid"></ol>
+        </section>
+
+        <!-- 核心预览卡片 -->
+        <article class="result-card" data-stage="idle">
+          <div class="card-heading">
+            <div class="card-heading-left">
+              <h3>壁纸预览</h3>
+              <span id="image-description" class="spec-chip" hidden></span>
+            </div>
+            <span class="badge">待生成</span>
+          </div>
+
+          <div class="media-box is-empty" id="media-box">
+            <div class="empty">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              <p>选择宠物正面照并点击生成，高清壁纸将在此展示</p>
+            </div>
+            <img alt="生成的待机图" hidden id="result-image">
+            <span id="compare-badge" class="canvas-pill" hidden>正在对比：原图</span>
+            <span id="zoom-hint" class="canvas-hint" hidden>点击查看大图</span>
+          </div>
+
+          <div class="card-actions" id="card-actions" hidden>
+            <a class="accent-btn" id="use-idle" hidden>用这张图生成视频 ↗</a>
+            <a class="primary-outline download" hidden>下载原图 ↓</a>
+            <button class="secondary-sm" id="compare-original" type="button" hidden>对比原图</button>
+            <button class="redo secondary-sm" type="button" hidden>按原参数重做 ↻</button>
+          </div>
+
+          <div id="job-inputs" class="lab-job-inputs" hidden>
+            <div class="inputs-header">
+              <strong>本次提示词与参考图</strong>
+              <button type="button" class="text-button" id="load-job-prompt">载入提示词到编辑区</button>
+            </div>
+            <p id="job-prompt"></p>
+            <ol id="job-references" class="reference-list compact" aria-label="本次参考图"></ol>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

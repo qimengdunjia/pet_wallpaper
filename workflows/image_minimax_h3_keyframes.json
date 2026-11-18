@@ -1,0 +1,911 @@
+{
+  "id": "88f81d89-9d0a-451b-8d69-4f2b7560de38",
+  "revision": 2,
+  "last_node_id": 10,
+  "last_link_id": 20,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "e44b07f9-d950-490c-abbe-fef0d058aec2",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        540,
+        740
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "title": "MiniMax H3 Image 首尾帧生图",
+      "inputs": [
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "prompt"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "height"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "image_1",
+          "type": "IMAGE",
+          "link": null,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0"
+      },
+      "widgets_values": [
+        "A photorealistic orange tabby cat resting in a relaxed sphinx pose on a soft cream blanket, both front paws fully visible and parallel, facing the camera, bright curious eyes, natural proportions, finely detailed fur and whiskers. The entire body and tail fit comfortably inside the frame with open space around the head and paws for later animation. A quiet warm living room with a simple softly blurred background, gentle daylight from the left, eye-level fixed camera, horizontal composition, realistic photography, no text.",
+        3072,
+        1728,
+        42
+      ],
+      "widgets_values_named": {
+        "prompt": "A photorealistic orange tabby cat resting in a relaxed sphinx pose on a soft cream blanket, both front paws fully visible and parallel, facing the camera, bright curious eyes, natural proportions, finely detailed fur and whiskers. The entire body and tail fit comfortably inside the frame with open space around the head and paws for later animation. A quiet warm living room with a simple softly blurred background, gentle daylight from the left, eye-level fixed camera, horizontal composition, realistic photography, no text.",
+        "width": 3072,
+        "height": 1728,
+        "seed": 42
+      }
+    },
+    {
+      "id": 2,
+      "type": "SaveImage",
+      "pos": [
+        610,
+        0
+      ],
+      "size": [
+        600,
+        650
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "minimax_h3_image/keyframe"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "minimax_h3_image/keyframe"
+      },
+      "title": "保存首尾帧"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "MiniMax H3 Image 首尾帧生图",
+      "bounding": [
+        -20,
+        -60,
+        1260,
+        840
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "e44b07f9-d950-490c-abbe-fef0d058aec2",
+        "version": 1,
+        "state": {
+          "lastGroupId": 0,
+          "lastNodeId": 10,
+          "lastLinkId": 20,
+          "lastRerouteId": 0
+        },
+        "revision": 0,
+        "config": {},
+        "name": "MiniMax H3 Image 首尾帧生图",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            -1070,
+            190,
+            128,
+            268
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            1790,
+            346,
+            128,
+            68
+          ]
+        },
+        "inputs": [
+          {
+            "id": "b45c23c4-b430-4c4e-ac0e-ce2102e5773e",
+            "name": "prompt",
+            "type": "STRING",
+            "linkIds": [
+              13
+            ],
+            "pos": [
+              -966,
+              214
+            ]
+          },
+          {
+            "id": "34d0bba7-e8a6-4743-af80-ae08a5223d08",
+            "name": "width",
+            "type": "INT",
+            "linkIds": [
+              14
+            ],
+            "pos": [
+              -966,
+              234
+            ]
+          },
+          {
+            "id": "1d46bc40-1e44-4521-a61e-f4e7d49aa61e",
+            "name": "height",
+            "type": "INT",
+            "linkIds": [
+              15
+            ],
+            "pos": [
+              -966,
+              254
+            ]
+          },
+          {
+            "id": "ae8ff815-baba-4c4b-a054-a47e088bcc3c",
+            "name": "seed",
+            "type": "INT",
+            "linkIds": [
+              16
+            ],
+            "pos": [
+              -966,
+              274
+            ]
+          },
+          {
+            "id": "3e815296-b8e1-4878-9077-7436db791411",
+            "name": "image_1",
+            "type": "IMAGE",
+            "linkIds": [
+              20
+            ],
+            "pos": [
+              -966,
+              294
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "1540fbe2-fc77-40f8-8aac-348935c0bc12",
+            "name": "IMAGE",
+            "type": "IMAGE",
+            "linkIds": [
+              11
+            ],
+            "localized_name": "IMAGE",
+            "pos": [
+              1814,
+              370
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 3,
+            "type": "UNETLoader",
+            "pos": [
+              -180,
+              -250
+            ],
+            "size": [
+              590,
+              90
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "unet_name",
+                "name": "unet_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "unet_name"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  12
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "UNETLoader",
+              "models": [
+                {
+                  "name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+                  "directory": "diffusion_models"
+                }
+              ]
+            },
+            "widgets_values": [
+              "minimax_h3_image_pruned_int8_convrot.safetensors",
+              "default"
+            ],
+            "widgets_values_named": {
+              "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+              "weight_dtype": "default"
+            }
+          },
+          {
+            "id": 4,
+            "type": "CLIPLoader",
+            "pos": [
+              -180,
+              -80
+            ],
+            "size": [
+              590,
+              120
+            ],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "clip_name",
+                "name": "clip_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "clip_name"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "CLIP",
+                "name": "CLIP",
+                "type": "CLIP",
+                "links": [
+                  2
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "CLIPLoader",
+              "models": [
+                {
+                  "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+                  "directory": "text_encoders"
+                }
+              ]
+            },
+            "widgets_values": [
+              "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+              "minimax",
+              "default"
+            ],
+            "widgets_values_named": {
+              "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+              "type": "minimax",
+              "device": "default"
+            }
+          },
+          {
+            "id": 5,
+            "type": "VAELoader",
+            "pos": [
+              -180,
+              110
+            ],
+            "size": [
+              590,
+              70
+            ],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "vae_name",
+                "name": "vae_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "vae_name"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "VAE",
+                "name": "VAE",
+                "type": "VAE",
+                "links": [
+                  3,
+                  10
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "VAELoader",
+              "models": [
+                {
+                  "name": "minimax_h3_image_vae_fp16.safetensors",
+                  "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/vae/minimax_h3_image_vae_fp16.safetensors",
+                  "directory": "vae"
+                }
+              ]
+            },
+            "widgets_values": [
+              "minimax_h3_image_vae_fp16.safetensors"
+            ],
+            "widgets_values_named": {
+              "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+            }
+          },
+          {
+            "id": 6,
+            "type": "MiniMaxH3ImageConditioning",
+            "pos": [
+              540,
+              -260
+            ],
+            "size": [
+              440,
+              400
+            ],
+            "flags": {},
+            "order": 5,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "clip",
+                "name": "clip",
+                "type": "CLIP",
+                "link": 2
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "shape": 7,
+                "type": "VAE",
+                "link": 3
+              },
+              {
+                "localized_name": "image_1",
+                "name": "images.image_1",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 20
+              },
+              {
+                "localized_name": "prompt",
+                "name": "prompt",
+                "type": "STRING",
+                "widget": {
+                  "name": "prompt"
+                },
+                "link": 13
+              },
+              {
+                "localized_name": "width",
+                "name": "width",
+                "type": "INT",
+                "widget": {
+                  "name": "width"
+                },
+                "link": 14
+              },
+              {
+                "localized_name": "height",
+                "name": "height",
+                "type": "INT",
+                "widget": {
+                  "name": "height"
+                },
+                "link": 15
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "positive",
+                "name": "positive",
+                "type": "CONDITIONING",
+                "links": [
+                  4,
+                  6
+                ]
+              },
+              {
+                "localized_name": "LATENT",
+                "name": "LATENT",
+                "type": "LATENT",
+                "links": [
+                  8
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "MiniMaxH3ImageConditioning"
+            },
+            "widgets_values": [
+              "A photorealistic orange tabby cat resting in a relaxed sphinx pose on a soft cream blanket, both front paws fully visible and parallel, facing the camera, bright curious eyes, natural proportions, finely detailed fur and whiskers. The entire body and tail fit comfortably inside the frame with open space around the head and paws for later animation. A quiet warm living room with a simple softly blurred background, gentle daylight from the left, eye-level fixed camera, horizontal composition, realistic photography, no text.",
+              3072,
+              1728
+            ],
+            "widgets_values_named": {
+              "prompt": "A photorealistic orange tabby cat resting in a relaxed sphinx pose on a soft cream blanket, both front paws fully visible and parallel, facing the camera, bright curious eyes, natural proportions, finely detailed fur and whiskers. The entire body and tail fit comfortably inside the frame with open space around the head and paws for later animation. A quiet warm living room with a simple softly blurred background, gentle daylight from the left, eye-level fixed camera, horizontal composition, realistic photography, no text.",
+              "width": 3072,
+              "height": 1728
+            }
+          },
+          {
+            "id": 7,
+            "type": "ConditioningZeroOut",
+            "pos": [
+              610,
+              210
+            ],
+            "size": [
+              300,
+              50
+            ],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "conditioning",
+                "name": "conditioning",
+                "type": "CONDITIONING",
+                "link": 4
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "CONDITIONING",
+                "name": "CONDITIONING",
+                "type": "CONDITIONING",
+                "links": [
+                  7
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "ConditioningZeroOut"
+            }
+          },
+          {
+            "id": 8,
+            "type": "KSampler",
+            "pos": [
+              1120,
+              -260
+            ],
+            "size": [
+              320,
+              480
+            ],
+            "flags": {},
+            "order": 7,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "model",
+                "name": "model",
+                "type": "MODEL",
+                "link": 5
+              },
+              {
+                "localized_name": "positive",
+                "name": "positive",
+                "type": "CONDITIONING",
+                "link": 6
+              },
+              {
+                "localized_name": "negative",
+                "name": "negative",
+                "type": "CONDITIONING",
+                "link": 7
+              },
+              {
+                "localized_name": "latent_image",
+                "name": "latent_image",
+                "type": "LATENT",
+                "link": 8
+              },
+              {
+                "localized_name": "seed",
+                "name": "seed",
+                "type": "INT",
+                "widget": {
+                  "name": "seed"
+                },
+                "link": 16
+              },
+              {
+                "localized_name": "sampler_name",
+                "name": "sampler_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "sampler_name"
+                },
+                "link": null
+              },
+              {
+                "localized_name": "scheduler",
+                "name": "scheduler",
+                "type": "COMBO",
+                "widget": {
+                  "name": "scheduler"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "LATENT",
+                "name": "LATENT",
+                "type": "LATENT",
+                "links": [
+                  9
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "KSampler"
+            },
+            "widgets_values": [
+              42,
+              "fixed",
+              6,
+              1,
+              "euler",
+              "simple",
+              1
+            ],
+            "widgets_values_named": {
+              "seed": 42,
+              "control_after_generate": "fixed",
+              "steps": 6,
+              "cfg": 1,
+              "sampler_name": "euler",
+              "scheduler": "simple",
+              "denoise": 1
+            }
+          },
+          {
+            "id": 9,
+            "type": "VAEDecode",
+            "pos": [
+              1520,
+              -250
+            ],
+            "size": [
+              210,
+              50
+            ],
+            "flags": {},
+            "order": 8,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "samples",
+                "name": "samples",
+                "type": "LATENT",
+                "link": 9
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "type": "VAE",
+                "link": 10
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "IMAGE",
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  11
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "VAEDecode"
+            }
+          },
+          {
+            "id": 10,
+            "type": "ModelAttentionBackend",
+            "pos": [
+              540,
+              -440
+            ],
+            "size": [
+              440,
+              90
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "model",
+                "type": "MODEL",
+                "link": 12
+              },
+              {
+                "name": "attention",
+                "type": "COMBO",
+                "widget": {
+                  "name": "attention"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "name": "model",
+                "type": "MODEL",
+                "links": [
+                  5
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "ModelAttentionBackend",
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0"
+            },
+            "widgets_values": [
+              "pytorch attention"
+            ],
+            "widgets_values_named": {
+              "attention": "pytorch attention"
+            }
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 2,
+            "origin_id": 4,
+            "origin_slot": 0,
+            "target_id": 6,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 3,
+            "origin_id": 5,
+            "origin_slot": 0,
+            "target_id": 6,
+            "target_slot": 1,
+            "type": "VAE"
+          },
+          {
+            "id": 4,
+            "origin_id": 6,
+            "origin_slot": 0,
+            "target_id": 7,
+            "target_slot": 0,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 5,
+            "origin_id": 10,
+            "origin_slot": 0,
+            "target_id": 8,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 6,
+            "origin_id": 6,
+            "origin_slot": 0,
+            "target_id": 8,
+            "target_slot": 1,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 7,
+            "origin_id": 7,
+            "origin_slot": 0,
+            "target_id": 8,
+            "target_slot": 2,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 8,
+            "origin_id": 6,
+            "origin_slot": 1,
+            "target_id": 8,
+            "target_slot": 3,
+            "type": "LATENT"
+          },
+          {
+            "id": 9,
+            "origin_id": 8,
+            "origin_slot": 0,
+            "target_id": 9,
+            "target_slot": 0,
+            "type": "LATENT"
+          },
+          {
+            "id": 10,
+            "origin_id": 5,
+            "origin_slot": 0,
+            "target_id": 9,
+            "target_slot": 1,
+            "type": "VAE"
+          },
+          {
+            "id": 11,
+            "origin_id": 9,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 12,
+            "origin_id": 3,
+            "origin_slot": 0,
+            "target_id": 10,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 13,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 6,
+            "target_slot": 3,
+            "type": "STRING"
+          },
+          {
+            "id": 14,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 6,
+            "target_slot": 4,
+            "type": "INT"
+          },
+          {
+            "id": 15,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 6,
+            "target_slot": 5,
+            "type": "INT"
+          },
+          {
+            "id": 16,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 8,
+            "target_slot": 4,
+            "type": "INT"
+          },
+          {
+            "id": 20,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 6,
+            "target_slot": 2,
+            "type": "IMAGE"
+          }
+        ],
+        "extra": {}
+      }
+    ]
+  },
+  "config": {},
+  "extra": {
+    "minimax_h3_image": {
+      "description": "文件用途：独立生成视频首尾帧，生图结果由用户选择后再载入视频工作流。",
+      "source": "https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_minimax_h3_image_t2i.json",
+      "comfyui": "v0.45.0",
+      "separate_video_branch": true,
+      "attention_backend": "pytorch attention",
+      "save_node_muted": false,
+      "fixed_models": {
+        "unet_name": "minimax_h3_image_pruned_int8_convrot.safetensors",
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "vae_name": "minimax_h3_image_vae_fp16.safetensors"
+      },
+      "active_output": "image"
+    },
+    "ds": {
+      "scale": 0.8,
+      "offset": [
+        100,
+        100
+      ]
+    }
+  },
+  "version": 0.4
+}

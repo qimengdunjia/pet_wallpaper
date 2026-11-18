@@ -1,0 +1,3 @@
+# 文件用途：定义状态机与接口回归验证所需依赖。
+-r requirements.txt
+pytest>=8,<10

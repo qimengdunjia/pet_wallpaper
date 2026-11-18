@@ -1,0 +1,267 @@
+<!doctype html>
+<!-- 文件用途：提供独立的图生视频测试表单、任务查询和成品预览。 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="复用待机图或上传首帧，测试不同宠物动作。">
+  <title>图生视频 · 宠物壁纸测试台</title>
+  <link rel="icon" href="/assets/paw.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/video-inspection.js" defer></script>
+  <script src="/assets/app.js" defer></script>
+</head>
+<body data-job-kind="video">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/" title="宠物壁纸测试台">
+        <img src="/assets/paw.svg" alt="" width="28" height="28">
+        <span>宠物壁纸测试台</span>
+        <span id="service-pill" class="service-pill" aria-live="polite">连接中…</span>
+      </a>
+      <nav class="lab-tabs" aria-label="功能切换">
+        <a href="/image-to-image">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          图生图
+        </a>
+        <a href="/image-to-video" aria-current="page">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
+          图生视频
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div id="config-notice" class="notice" hidden></div>
+    <div id="alert" class="notice error" role="alert" hidden></div>
+
+    <div class="lab-layout">
+      <!-- 左侧控制面板 -->
+      <section class="lab-panel" aria-labelledby="panel-title">
+        <div class="panel-header">
+          <h1 id="panel-title">图生视频</h1>
+          <p class="panel-subtitle">选择待机首帧与动作预设，测试交互成片</p>
+        </div>
+
+        <!-- 1. 动作预设 -->
+        <div class="panel-block">
+          <div class="block-label-row">
+            <span class="block-label">动作方案</span>
+          </div>
+          <select id="video-preset" hidden aria-hidden="true">
+            <option value="">自定义动作</option>
+          </select>
+          <div id="preset-categories" class="segmented-bar" role="group" aria-label="动作分类"></div>
+          <div id="preset-subpills" class="subpill-row" role="group" aria-label="动作预设" hidden></div>
+          <p id="video-preset-note" class="preset-hint" aria-live="polite" hidden></p>
+        </div>
+
+        <!-- 2. 首尾帧与素材库 -->
+        <div class="panel-block">
+          <div class="block-label-row">
+            <h2 class="block-label" id="upload-heading">首尾帧</h2>
+            <div id="frame-mode-toggle" class="mini-segmented" role="group" aria-label="帧模式">
+              <button type="button" data-frame-mode="first_last" aria-pressed="true">首尾帧</button>
+              <button type="button" data-frame-mode="first" aria-pressed="false">仅首帧</button>
+            </div>
+          </div>
+
+          <div class="frame-slots" id="frame-slots">
+            <label class="dropzone frame-slot" id="dropzone" for="photo">
+              <input id="photo" type="file" accept="image/jpeg,image/png" aria-label="上传首帧">
+              <img id="upload-preview" alt="首帧图片" hidden>
+              <span class="slot-role">首帧</span>
+              <span class="upload-icon" aria-hidden="true">＋</span>
+              <strong id="upload-label">上传或从下方点选</strong>
+              <span id="upload-help" class="upload-help">支持拖拽 / Ctrl+V</span>
+              <button id="clear-first" class="slot-clear" type="button" aria-label="清除首帧" hidden>✕</button>
+            </label>
+
+            <button id="swap-frames" class="swap-btn" type="button" title="互换首帧与尾帧" aria-label="互换首帧与尾帧" hidden>⇄</button>
+
+            <label class="dropzone frame-slot" id="tail-zone" for="tail-photo">
+              <input id="tail-photo" type="file" accept="image/jpeg,image/png" aria-label="上传尾帧">
+              <img id="tail-preview" alt="尾帧图片" hidden>
+              <span class="slot-role">尾帧</span>
+              <span class="upload-icon" aria-hidden="true">＋</span>
+              <strong id="tail-label">留空复用首帧</strong>
+              <span id="tail-help" class="upload-help">可上传或从素材库指定</span>
+              <button id="clear-tail" class="slot-clear" type="button" aria-label="清除尾帧" hidden>✕</button>
+            </label>
+          </div>
+
+          <!-- 素材库 -->
+          <div class="gallery-section">
+            <div class="gallery-heading">
+              <span>素材库 <span id="gallery-count" class="count-pill"></span></span>
+              <div class="gallery-actions">
+                <input id="gallery-photo" type="file" accept="image/jpeg,image/png" aria-label="添加素材图片" hidden>
+                <button id="add-image" class="mini-pill-btn" type="button" disabled>+ 添加图片</button>
+                <button id="refresh-images" class="text-button" type="button" disabled>刷新</button>
+              </div>
+            </div>
+            <p id="gallery-empty" class="gallery-empty">正在读取素材…</p>
+            <div id="idle-gallery" class="idle-gallery" role="group" aria-label="素材库图片" hidden></div>
+          </div>
+        </div>
+
+        <!-- 3. 动作提示词 -->
+        <div class="panel-block">
+          <div class="block-label-row">
+            <label class="block-label" for="prompt">
+              动作提示词
+              <span id="prompt-dirty" class="dirty-tag" hidden>已修改</span>
+            </label>
+            <div class="prompt-tools">
+              <button type="button" class="text-button" id="btn-reset-prompt" title="恢复该预设默认提示词" hidden>恢复默认</button>
+              <button type="button" class="text-button" id="btn-copy-prompt" title="复制提示词">复制</button>
+              <button type="button" class="text-button" id="btn-clear-prompt" title="清空提示词">清空</button>
+              <span id="prompt-counter" class="prompt-counter">0/2500</span>
+            </div>
+          </div>
+          <textarea id="prompt" class="prompt-input" maxlength="2500" rows="4" placeholder="例如：固定镜头，小猫轻轻眨眼，胸口随呼吸起伏，回到待机姿势。"></textarea>
+
+          <div class="prompt-actions">
+            <div class="prompt-actions-left">
+              <button id="prompt-update" class="secondary-sm" type="button" hidden>保存修改</button>
+              <button id="prompt-save-as" class="text-button" type="button" disabled>保存为预设</button>
+            </div>
+            <p id="prompt-save-status" class="prompt-save-status" role="status" hidden></p>
+          </div>
+
+          <form id="prompt-save-form" class="prompt-save-form" hidden>
+            <input id="prompt-preset-name" type="text" placeholder="输入新预设名称，如：布偶猫眨眼" required maxlength="60" aria-label="新建预设名称">
+            <button id="prompt-save-confirm" class="secondary-sm" type="submit">保存</button>
+            <button id="prompt-save-cancel" class="text-button" type="button">取消</button>
+          </form>
+        </div>
+
+        <!-- 4. 视频参数与 Omni 参考图 -->
+        <div class="panel-block">
+          <details id="video-options-panel" class="options-accordion">
+            <summary class="options-summary">
+              <span class="options-summary-title">视频参数</span>
+              <span id="video-options-summary" class="options-summary-value">Kling 3.0 · 4 秒 · 720p · 首尾帧</span>
+            </summary>
+            <fieldset id="video-options" class="generation-options" aria-describedby="video-options-note" disabled>
+              <div class="generation-options-grid">
+                <label>视频模型<select id="video-model"></select></label>
+                <label>成片时长<select id="video-duration"></select></label>
+                <label>输出分辨率<select id="video-resolution"></select></label>
+                <label>帧模式<select id="video-frame-mode"></select></label>
+              </div>
+              <p id="video-options-note" class="photo-tip" aria-live="polite"></p>
+            </fieldset>
+          </details>
+
+          <div id="video-reference-section" class="extra-refs" hidden>
+            <div class="block-label-row">
+              <span class="block-label">Omni 额外参考图</span>
+              <label class="mini-pill-btn upload-inline-btn" for="video-reference-photo">+ 添加参考图
+                <input id="video-reference-photo" type="file" accept="image/jpeg,image/png" multiple hidden>
+              </label>
+            </div>
+            <p class="photo-tip">最多 5 张；点击下方编号标签可插入提示词。</p>
+            <ol id="video-reference-draft" class="reference-list" aria-label="额外参考图"></ol>
+          </div>
+        </div>
+
+        <!-- 5. 提交 -->
+        <div class="panel-submit">
+          <p id="submit-hint" class="submit-hint" hidden></p>
+          <button class="primary" id="start" disabled>生成视频</button>
+          <p class="credit-note">每次提交使用可灵账户额度生成一段视频</p>
+        </div>
+      </section>
+
+      <!-- 右侧成果与状态面板 -->
+      <section class="lab-panel lab-output" aria-labelledby="results-heading">
+        <div class="output-toolbar">
+          <div class="status-inline">
+            <span id="status-dot" class="status-dot"></span>
+            <div class="status-copy">
+              <div class="status-line">
+                <h2 id="results-heading" class="sr-only">生成结果</h2>
+                <strong id="status-title" role="status" aria-live="polite">等待首帧</strong>
+                <span id="status-timer" class="status-timer" hidden></span>
+              </div>
+              <p id="status-detail" class="status-detail">选择首帧并填写动作提示词后即可生成。</p>
+            </div>
+            <button id="retry" class="secondary-sm" hidden>重试</button>
+          </div>
+          <label class="history-label">
+            <span class="sr-only">测试记录</span>
+            <select id="history" aria-label="切换测试记录">
+              <option value="">暂无记录</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- 任务核对面板 -->
+        <div id="review" class="review" hidden>
+          <strong>提交结果待核对</strong>
+          <p>请在可灵控制台确认任务是否已创建。若已有任务可绑定 ID 继续查询，避免重复付费。</p>
+          <div class="review-controls">
+            <input id="provider-id" placeholder="输入可灵任务 ID" aria-label="供应商任务 ID" maxlength="128">
+            <button id="bind-task" class="secondary-sm">绑定并查询</button>
+            <button id="not-created" class="text-button">已核对，未创建</button>
+          </div>
+        </div>
+
+        <!-- 核心视频预览卡片 -->
+        <article class="result-card" data-stage="video">
+          <div class="card-heading">
+            <div class="card-heading-left">
+              <h3>成片预览</h3>
+              <span id="video-description" class="spec-chip" hidden></span>
+            </div>
+            <span class="badge">待生成</span>
+          </div>
+
+          <div class="media-box is-empty" id="media-box">
+            <div class="empty">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
+              <p>选择首帧并生成，成片将在此自动循环播放</p>
+            </div>
+            <video controls autoplay loop muted playsinline preload="metadata" hidden aria-label="测试视频播放器"></video>
+          </div>
+
+          <div class="card-actions" id="card-actions" hidden>
+            <a class="primary-outline download" hidden>下载成片 MP4 ↓</a>
+            <button class="redo secondary-sm" data-stage="video" type="button" hidden>按原参数重做 ↻</button>
+            <p id="loop-note" class="loop-note" hidden>
+              <span class="loop-dot" aria-hidden="true"></span>
+              <span>循环播放中</span>
+              <span id="loop-count"></span>
+            </p>
+          </div>
+
+          <!-- 成片规格与抽帧检查 -->
+          <section id="video-inspection" class="inspection-card" aria-labelledby="inspection-title" hidden>
+            <div class="inspection-header">
+              <div class="inspection-title-group">
+                <strong id="inspection-title">成片规格与画面抽帧</strong>
+                <span id="video-info" class="spec-meta" role="status"></span>
+              </div>
+              <button id="sample-frames" class="secondary-sm" type="button">对比首 / 中 / 尾帧</button>
+            </div>
+            <div id="video-samples" class="video-samples"></div>
+          </section>
+
+          <!-- 任务输入复盘 -->
+          <div id="job-inputs" class="lab-job-inputs" hidden>
+            <div class="inputs-header">
+              <strong>本次提示词与输入帧</strong>
+              <button type="button" class="text-button" id="load-job-prompt">载入提示词到编辑区</button>
+            </div>
+            <p id="job-prompt"></p>
+            <ol id="job-frames-recap" class="reference-list compact" aria-label="本次首尾帧"></ol>
+            <ol id="job-video-references" class="reference-list compact" aria-label="本次额外参考图" hidden></ol>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
