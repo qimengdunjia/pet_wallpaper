@@ -606,7 +606,7 @@
       ],
       "size": [
         510,
-        240
+        280
       ],
       "flags": {},
       "order": 8,
@@ -648,6 +648,38 @@
           "shape": 7,
           "type": "IMAGE",
           "link": 327
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "name": "output_width",
+          "type": "INT",
+          "widget": {
+            "name": "output_width"
+          },
+          "link": null
+        },
+        {
+          "name": "output_height",
+          "type": "INT",
+          "widget": {
+            "name": "output_height"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -668,12 +700,20 @@
       "widgets_values": [
         "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 3.00-second mark.\n\nintegrated_multimodal_description: [Shot 1] Start with the empty field from Picture 1. The orange tabby enters from the left and runs to the center. The golden retriever follows from the left a beat later. End in the composition of Picture 2, cat just ahead of the dog, both still running right. No pauses or fades. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         3,
-        2718
+        2718,
+        1024,
+        576,
+        1920,
+        1080
       ],
       "widgets_values_named": {
         "prompt": "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 3.00-second mark.\n\nintegrated_multimodal_description: [Shot 1] Start with the empty field from Picture 1. The orange tabby enters from the left and runs to the center. The golden retriever follows from the left a beat later. End in the composition of Picture 2, cat just ahead of the dog, both still running right. No pauses or fades. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         "value_1": 3,
-        "noise_seed": 2718
+        "noise_seed": 2718,
+        "width": 1024,
+        "height": 576,
+        "output_width": 1920,
+        "output_height": 1080
       },
       "title": "先导 · 3s"
     },
@@ -771,7 +811,7 @@
       ],
       "size": [
         510,
-        240
+        280
       ],
       "flags": {},
       "order": 10,
@@ -813,6 +853,38 @@
           "shape": 7,
           "type": "IMAGE",
           "link": 330
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "name": "output_width",
+          "type": "INT",
+          "widget": {
+            "name": "output_width"
+          },
+          "link": null
+        },
+        {
+          "name": "output_height",
+          "type": "INT",
+          "widget": {
+            "name": "output_height"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -833,12 +905,20 @@
       "widgets_values": [
         "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 7.25-second mark.\n\nintegrated_multimodal_description: [Shot 1] Both pets are already running right at the start, the tabby slightly ahead. The retriever accelerates past the tabby, then the tabby accelerates back into the lead. Recover the exact positions, poses and rightward gait of Picture 1 at Picture 2 without slowing to a stop. Continuous stride through the loop seam, not a frozen or duplicated shot. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         7,
-        2719
+        2719,
+        1024,
+        576,
+        1920,
+        1080
       ],
       "widgets_values_named": {
         "prompt": "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 7.25-second mark.\n\nintegrated_multimodal_description: [Shot 1] Both pets are already running right at the start, the tabby slightly ahead. The retriever accelerates past the tabby, then the tabby accelerates back into the lead. Recover the exact positions, poses and rightward gait of Picture 1 at Picture 2 without slowing to a stop. Continuous stride through the loop seam, not a frozen or duplicated shot. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         "value_1": 7,
-        "noise_seed": 2719
+        "noise_seed": 2719,
+        "width": 1024,
+        "height": 576,
+        "output_width": 1920,
+        "output_height": 1080
       },
       "title": "等待循环 · 7s"
     },
@@ -936,7 +1016,7 @@
       ],
       "size": [
         510,
-        240
+        280
       ],
       "flags": {},
       "order": 12,
@@ -978,6 +1058,38 @@
           "shape": 7,
           "type": "IMAGE",
           "link": 333
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "name": "output_width",
+          "type": "INT",
+          "widget": {
+            "name": "output_width"
+          },
+          "link": null
+        },
+        {
+          "name": "output_height",
+          "type": "INT",
+          "widget": {
+            "name": "output_height"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -998,12 +1110,20 @@
       "widgets_values": [
         "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 3.00-second mark.\n\nintegrated_multimodal_description: [Shot 1] Start with the tabby running at center. The golden retriever enters from the left, catches up and takes center. The tabby falls behind relative to the dog and leaves at the left edge while still running. End with only the retriever running at center; never morph one animal into the other. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         3,
-        2720
+        2720,
+        1024,
+        576,
+        1920,
+        1080
       ],
       "widgets_values_named": {
         "prompt": "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 3.00-second mark.\n\nintegrated_multimodal_description: [Shot 1] Start with the tabby running at center. The golden retriever enters from the left, catches up and takes center. The tabby falls behind relative to the dog and leaves at the left edge while still running. End with only the retriever running at center; never morph one animal into the other. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         "value_1": 3,
-        "noise_seed": 2720
+        "noise_seed": 2720,
+        "width": 1024,
+        "height": 576,
+        "output_width": 1920,
+        "output_height": 1080
       },
       "title": "猫切狗 · 3s"
     },
@@ -1101,7 +1221,7 @@
       ],
       "size": [
         510,
-        240
+        280
       ],
       "flags": {},
       "order": 14,
@@ -1143,6 +1263,38 @@
           "shape": 7,
           "type": "IMAGE",
           "link": 336
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "name": "output_width",
+          "type": "INT",
+          "widget": {
+            "name": "output_width"
+          },
+          "link": null
+        },
+        {
+          "name": "output_height",
+          "type": "INT",
+          "widget": {
+            "name": "output_height"
+          },
+          "link": null
         }
       ],
       "outputs": [
@@ -1163,12 +1315,20 @@
       "widgets_values": [
         "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 3.00-second mark.\n\nintegrated_multimodal_description: [Shot 1] Start with the retriever running at center. The orange tabby enters from the left, catches up and takes center. The retriever falls behind relative to the cat and leaves at the left edge while still running. End with only the tabby running at center; never morph one animal into the other. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         3,
-        2721
+        2721,
+        1024,
+        576,
+        1920,
+        1080
       ],
       "widgets_values_named": {
         "prompt": "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark; Picture 2 (from Shot 1) aligns with the 3.00-second mark.\n\nintegrated_multimodal_description: [Shot 1] Start with the retriever running at center. The orange tabby enters from the left, catches up and takes center. The retriever falls behind relative to the cat and leaves at the left edge while still running. End with only the tabby running at center; never morph one animal into the other. One locked-off wide side-on shot, same grass lane, horizon, sky and light throughout. Keep each pet's coat, size and anatomy stable. Distinct continuous running cycles with alternating paw contacts, no sliding or running backwards. No pan, zoom, cuts, text or logos.\n\noverall_soundscape: None.\nnon_diegetic_music: None.",
         "value_1": 3,
-        "noise_seed": 2721
+        "noise_seed": 2721,
+        "width": 1024,
+        "height": 576,
+        "output_width": 1920,
+        "output_height": 1080
       },
       "title": "狗切猫 · 3s"
     },
@@ -1463,8 +1623,8 @@
         "version": 1,
         "state": {
           "lastGroupId": 11,
-          "lastNodeId": 209,
-          "lastLinkId": 337,
+          "lastNodeId": 215,
+          "lastLinkId": 351,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -2225,8 +2385,8 @@
         "version": 1,
         "state": {
           "lastGroupId": 11,
-          "lastNodeId": 209,
-          "lastLinkId": 337,
+          "lastNodeId": 215,
+          "lastLinkId": 351,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -2317,6 +2477,58 @@
               5174
             ],
             "label": "尾帧"
+          },
+          {
+            "id": "2b48d613-5cfc-56b6-8daa-1524a84df4d3",
+            "name": "width",
+            "label": "采样宽度",
+            "type": "INT",
+            "linkIds": [
+              338
+            ],
+            "pos": [
+              -3036,
+              5034
+            ]
+          },
+          {
+            "id": "7eed0840-7755-5e92-b6cb-1b910c31e8dd",
+            "name": "height",
+            "label": "采样高度",
+            "type": "INT",
+            "linkIds": [
+              341
+            ],
+            "pos": [
+              -3036,
+              5054
+            ]
+          },
+          {
+            "id": "5d9c075e-6aa9-5e2e-8f05-236b32fe97ef",
+            "name": "output_width",
+            "label": "成片宽度",
+            "type": "INT",
+            "linkIds": [
+              344
+            ],
+            "pos": [
+              -3036,
+              5074
+            ]
+          },
+          {
+            "id": "7a8a62e1-0ddd-5175-a66a-45bf0885ebf2",
+            "name": "output_height",
+            "label": "成片高度",
+            "type": "INT",
+            "linkIds": [
+              348
+            ],
+            "pos": [
+              -3036,
+              5094
+            ]
           }
         ],
         "outputs": [
@@ -2953,7 +3165,7 @@
                 "widget": {
                   "name": "width"
                 },
-                "link": null
+                "link": 340
               },
               {
                 "localized_name": "高度",
@@ -2962,7 +3174,7 @@
                 "widget": {
                   "name": "height"
                 },
-                "link": null
+                "link": 343
               },
               {
                 "localized_name": "长度",
@@ -3568,7 +3780,7 @@
           {
             "id": 205,
             "type": "ImageScale",
-            "title": "动作帧放大至 1080p",
+            "title": "调整动作帧尺寸",
             "pos": [
               1550,
               4660
@@ -3602,7 +3814,7 @@
               {
                 "name": "width",
                 "type": "INT",
-                "link": null,
+                "link": 345,
                 "widget": {
                   "name": "width"
                 }
@@ -3610,7 +3822,7 @@
               {
                 "name": "height",
                 "type": "INT",
-                "link": null,
+                "link": 349,
                 "widget": {
                   "name": "height"
                 }
@@ -3649,7 +3861,7 @@
           {
             "id": 206,
             "type": "ImageScale",
-            "title": "原始首图转 1080p",
+            "title": "调整首帧尺寸",
             "pos": [
               1550,
               4890
@@ -3683,7 +3895,7 @@
               {
                 "name": "width",
                 "type": "INT",
-                "link": null,
+                "link": 346,
                 "widget": {
                   "name": "width"
                 }
@@ -3691,7 +3903,7 @@
               {
                 "name": "height",
                 "type": "INT",
-                "link": null,
+                "link": 350,
                 "widget": {
                   "name": "height"
                 }
@@ -3730,7 +3942,7 @@
           {
             "id": 207,
             "type": "ImageScale",
-            "title": "原始尾图转 1080p",
+            "title": "调整尾帧尺寸",
             "pos": [
               1550,
               5110
@@ -3764,7 +3976,7 @@
               {
                 "name": "width",
                 "type": "INT",
-                "link": null,
+                "link": 347,
                 "widget": {
                   "name": "width"
                 }
@@ -3772,7 +3984,7 @@
               {
                 "name": "height",
                 "type": "INT",
-                "link": null,
+                "link": 351,
                 "widget": {
                   "name": "height"
                 }
@@ -3906,6 +4118,324 @@
               "color_space": "sRGB",
               "chroma_subsampling": "auto",
               "codec": "none"
+            }
+          },
+          {
+            "id": 210,
+            "type": "PrimitiveInt",
+            "title": "采样宽度",
+            "pos": [
+              -1320,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 24,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 338,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  339
+                ]
+              }
+            ],
+            "widgets_values": [
+              1024,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 1024,
+              "control_after_generate": "fixed"
+            }
+          },
+          {
+            "id": 211,
+            "type": "ComfyMathExpression",
+            "title": "采样宽度对齐",
+            "pos": [
+              -1320,
+              4450
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 25,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "ComfyMathExpression"
+            },
+            "inputs": [
+              {
+                "name": "values.a",
+                "type": "FLOAT,INT,BOOLEAN",
+                "link": 339
+              },
+              {
+                "name": "expression",
+                "type": "STRING",
+                "link": null,
+                "widget": {
+                  "name": "expression"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "FLOAT",
+                "type": "FLOAT",
+                "links": []
+              },
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  340
+                ]
+              },
+              {
+                "name": "BOOL",
+                "type": "BOOLEAN",
+                "links": []
+              }
+            ],
+            "widgets_values": [
+              "max(32, round(a / 32) * 32)"
+            ],
+            "widgets_values_named": {
+              "expression": "max(32, round(a / 32) * 32)"
+            }
+          },
+          {
+            "id": 212,
+            "type": "PrimitiveInt",
+            "title": "采样高度",
+            "pos": [
+              -1010,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 26,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 341,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  342
+                ]
+              }
+            ],
+            "widgets_values": [
+              576,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 576,
+              "control_after_generate": "fixed"
+            }
+          },
+          {
+            "id": 213,
+            "type": "ComfyMathExpression",
+            "title": "采样高度对齐",
+            "pos": [
+              -1010,
+              4450
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 27,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "ComfyMathExpression"
+            },
+            "inputs": [
+              {
+                "name": "values.a",
+                "type": "FLOAT,INT,BOOLEAN",
+                "link": 342
+              },
+              {
+                "name": "expression",
+                "type": "STRING",
+                "link": null,
+                "widget": {
+                  "name": "expression"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "FLOAT",
+                "type": "FLOAT",
+                "links": []
+              },
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  343
+                ]
+              },
+              {
+                "name": "BOOL",
+                "type": "BOOLEAN",
+                "links": []
+              }
+            ],
+            "widgets_values": [
+              "max(32, round(a / 32) * 32)"
+            ],
+            "widgets_values_named": {
+              "expression": "max(32, round(a / 32) * 32)"
+            }
+          },
+          {
+            "id": 214,
+            "type": "PrimitiveInt",
+            "title": "成片宽度",
+            "pos": [
+              -700,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 28,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 344,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  345,
+                  346,
+                  347
+                ]
+              }
+            ],
+            "widgets_values": [
+              1920,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 1920,
+              "control_after_generate": "fixed"
+            }
+          },
+          {
+            "id": 215,
+            "type": "PrimitiveInt",
+            "title": "成片高度",
+            "pos": [
+              -390,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 29,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 348,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  349,
+                  350,
+                  351
+                ]
+              }
+            ],
+            "widgets_values": [
+              1080,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 1080,
+              "control_after_generate": "fixed"
             }
           }
         ],
@@ -4239,6 +4769,118 @@
             "target_id": -20,
             "target_slot": 0,
             "type": "VIDEO"
+          },
+          {
+            "id": 338,
+            "origin_id": -10,
+            "origin_slot": 5,
+            "target_id": 210,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 339,
+            "origin_id": 210,
+            "origin_slot": 0,
+            "target_id": 211,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 340,
+            "origin_id": 211,
+            "origin_slot": 1,
+            "target_id": 131,
+            "target_slot": 5,
+            "type": "INT"
+          },
+          {
+            "id": 341,
+            "origin_id": -10,
+            "origin_slot": 6,
+            "target_id": 212,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 342,
+            "origin_id": 212,
+            "origin_slot": 0,
+            "target_id": 213,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 343,
+            "origin_id": 213,
+            "origin_slot": 1,
+            "target_id": 131,
+            "target_slot": 6,
+            "type": "INT"
+          },
+          {
+            "id": 344,
+            "origin_id": -10,
+            "origin_slot": 7,
+            "target_id": 214,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 345,
+            "origin_id": 214,
+            "origin_slot": 0,
+            "target_id": 205,
+            "target_slot": 2,
+            "type": "INT"
+          },
+          {
+            "id": 346,
+            "origin_id": 214,
+            "origin_slot": 0,
+            "target_id": 206,
+            "target_slot": 2,
+            "type": "INT"
+          },
+          {
+            "id": 347,
+            "origin_id": 214,
+            "origin_slot": 0,
+            "target_id": 207,
+            "target_slot": 2,
+            "type": "INT"
+          },
+          {
+            "id": 348,
+            "origin_id": -10,
+            "origin_slot": 8,
+            "target_id": 215,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 349,
+            "origin_id": 215,
+            "origin_slot": 0,
+            "target_id": 205,
+            "target_slot": 3,
+            "type": "INT"
+          },
+          {
+            "id": 350,
+            "origin_id": 215,
+            "origin_slot": 0,
+            "target_id": 206,
+            "target_slot": 3,
+            "type": "INT"
+          },
+          {
+            "id": 351,
+            "origin_id": 215,
+            "origin_slot": 0,
+            "target_id": 207,
+            "target_slot": 3,
+            "type": "INT"
           }
         ],
         "extra": {}
@@ -4256,6 +4898,6 @@
       ]
     }
   },
-  "last_node_id": 209,
-  "last_link_id": 337
+  "last_node_id": 215,
+  "last_link_id": 351
 }

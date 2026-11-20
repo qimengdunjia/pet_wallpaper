@@ -5,13 +5,14 @@ from functools import partial
 from itertools import count
 import json
 from pathlib import Path
+from uuid import UUID, uuid5
 
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / "workflows"
 SOURCE = WORKFLOWS / "video_pika_h3_flex_fl2va.json"
 OUTPUT = WORKFLOWS / "pet_loading_h3_pika.json"
 FPS = 24
-VIDEO_SIZE = (1024, 576)  # Pika 采样尺寸；成片在画布内放大至 1080p。
+VIDEO_SIZE = (1024, 576)  # Pika 默认采样尺寸，成片尺寸可独立调整。
 IMAGE_SIZE = (2560, 1440)
 PREFIX = "pet_loading"
 
@@ -198,6 +199,59 @@ def prepare_video(graph, defaults, add, wire):
     graph["outputs"][0]["pos"] = [2514, 4674]
 
 
+def expose_video_resolution(workflow):
+    """在现有工作流上添加尺寸控件，保留其他节点和设定，无返回值。"""
+    graphs = workflow["definitions"]["subgraphs"]
+    graph = next(part for part in graphs if any(node["type"] == "MiniMaxH3ImageToVideo" for node in part["nodes"]))
+    sampler = next(node for node in graph["nodes"] if node["type"] == "MiniMaxH3ImageToVideo")
+    scales = [node for node in graph["nodes"] if node["type"] == "ImageScale"]
+    dimension_specs = (
+        ("width", "采样宽度", "width", sampler, True),
+        ("height", "采样高度", "height", sampler, True),
+        ("output_width", "成片宽度", "width", scales[0], False),
+        ("output_height", "成片高度", "height", scales[0], False),
+    )
+    add = partial(make_node, count(workflow["last_node_id"] + 1))
+    wire = partial(connect, count(workflow["last_link_id"] + 1))
+    box = graph["inputNode"]["bounding"]
+    box[3] = max(box[3], 48 + 20 * (len(graph["inputs"]) + len(dimension_specs)))
+    new_values = {}
+    for index, (name, label, axis, default_node, align) in enumerate(dimension_specs):
+        value = default_node["widgets_values_named"][axis]
+        new_values[name] = value
+        slot = len(graph["inputs"])
+        graph["inputs"].append({"id": str(uuid5(UUID(graph["id"]), name)), "name": name, "label": label,
+                                "type": "INT", "linkIds": [], "pos": [box[0] + box[2] - 24, box[1] + 24 + slot * 20]})
+        pos = [-1320 + index * 310, 4300]
+        dimension = add(graph, "PrimitiveInt", label, pos, [("value", "INT")], [("INT", "INT")],
+                        value=value, control_after_generate="fixed")
+        wire(graph, None, slot, dimension, "value")
+        if align:
+            # H3 的采样尺寸必须对齐到 32；与原 FL2VA 保持一致。
+            aligned = add(graph, "ComfyMathExpression", f"{label}对齐", [pos[0], pos[1] + 150],
+                          [("values.a", "FLOAT,INT,BOOLEAN"), ("expression", "STRING")],
+                          [("FLOAT", "FLOAT"), ("INT", "INT"), ("BOOL", "BOOLEAN")],
+                          expression="max(32, round(a / 32) * 32)")
+            wire(graph, dimension, 0, aligned, "values.a")
+            wire(graph, aligned, 1, sampler, axis)
+        else:
+            for scale in scales:
+                wire(graph, dimension, 0, scale, axis)
+
+    for scale, title in zip(scales, ("调整动作帧尺寸", "调整首帧尺寸", "调整尾帧尺寸")):
+        scale["title"] = title
+    for node in workflow["nodes"]:
+        if node["type"] == graph["id"]:
+            node["inputs"].extend({"name": name, "type": "INT", "widget": {"name": name}, "link": None}
+                                  for name in new_values)
+            set_widgets(node, **node["widgets_values_named"], **new_values)
+            node["size"][1] = max(node["size"][1], 280)
+    workflow.update(last_node_id=max(node["id"] for node in graph["nodes"]),
+                    last_link_id=max(link["id"] for link in graph["links"]))
+    for part in graphs:
+        part["state"].update(lastNodeId=workflow["last_node_id"], lastLinkId=workflow["last_link_id"])
+
+
 def build_workflow(template):
     """接收已部署模型同源的模板，返回包含四图和四视频的可导入工作流。"""
     image_graph, video_graph = (deepcopy(graph) for graph in reversed(template["definitions"]["subgraphs"]))
@@ -274,6 +328,7 @@ def build_workflow(template):
     workflow.update(last_node_id=max_node, last_link_id=max_link)
     for graph in (image_graph, video_graph):
         graph["state"].update(lastNodeId=max_node, lastLinkId=max_link, lastGroupId=11)
+    expose_video_resolution(workflow)
     return workflow
 
 
