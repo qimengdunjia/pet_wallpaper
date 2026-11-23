@@ -1,5 +1,17 @@
+<!-- 文件用途：显示车机底栏，使用 MasterGo 原图标并承接系统按钮。 -->
 <script setup lang="ts">
 import { computed } from "vue";
+import homeIcon from "@/assets/mastergo/dock-home.svg";
+import fanIcon from "@/assets/mastergo/dock-fan.svg";
+import navigationIcon from "@/assets/mastergo/dock-navigation.svg";
+import settingsIcon from "@/assets/mastergo/dock-settings.svg";
+import appsIcon from "@/assets/mastergo/dock-apps.svg";
+import defrostIcon from "@/assets/mastergo/dock-defrost.svg";
+import circulationIcon from "@/assets/mastergo/dock-circulation.svg";
+import volumeIcon from "@/assets/mastergo/dock-volume.svg";
+import camera360Icon from "@/assets/mastergo/dock-camera-360.svg";
+import climatePanelIcon from "@/assets/mastergo/dock-climate-panel.svg";
+import musicIcon from "@/assets/mastergo/dock-music.svg";
 import { petState } from "@/stores/petStore";
 import { interruptPlayback, playerState } from "@/stores/playerStore";
 import { setRoute, showToast, systemState } from "@/stores/systemStore";
@@ -9,6 +21,15 @@ const isDarkStage = computed(
     (systemState.route === "wallpaper" && !playerState.selectorOpen) ||
     systemState.route === "generating",
 );
+
+// MasterGo 底栏从左到右为设置、全景影像、导航、音乐和应用中心。
+const dockApps = [
+  { label: "车辆设置", icon: settingsIcon },
+  { label: "全景影像", icon: camera360Icon },
+  { label: "导航", icon: navigationIcon },
+  { label: "音乐", icon: musicIcon },
+  { label: "应用中心", icon: appsIcon },
+];
 
 function handleHomeClick() {
   interruptPlayback();
@@ -26,84 +47,46 @@ function handleDockHint(label: string) {
 
 <template>
   <footer
-    class="car-bottom-dock"
+    class="car-bottom-dock mastergo-dock"
     :class="{ 'is-dark-stage': isDarkStage }"
     data-testid="car-bottom-dock"
     @click.stop
   >
     <div class="dock-left">
       <button class="dock-icon-btn" title="回到首页" @click="handleHomeClick">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9">
-          <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19v-8.5Z" />
-          <path d="M9.5 16.5h5" stroke-linecap="round" />
-        </svg>
+        <img :src="homeIcon" alt="" />
       </button>
       <span class="temp-text">21.5°</span>
       <button class="dock-icon-btn" title="空调风量" @click="handleDockHint('空调风量')">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
-          <circle cx="12" cy="12" r="2.2" />
-          <path d="M12 9.8c0-3 2.8-5 4.8-3.8 1.4.8 1.2 3-.6 4.1M14.2 12c3 0 5 2.8 3.8 4.8-.8 1.4-3 1.2-4.1-.6M12 14.2c0 3-2.8 5-4.8 3.8-1.4-.8-1.2-3 .6-4.1M9.8 12c-3 0-5-2.8-3.8-4.8.8-1.4 3-1.2 4.1.6" />
-        </svg>
+        <img :src="fanIcon" alt="" />
+      </button>
+      <button class="dock-icon-btn" title="空调设置" @click="handleDockHint('空调设置')">
+        <img :src="climatePanelIcon" alt="" />
       </button>
     </div>
 
     <div class="dock-center">
-      <button class="dock-app-tile" title="导航" @click="handleDockHint('导航')">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="12 3 19 20 12 16.5 5 20 12 3" />
-        </svg>
-      </button>
-      <button class="dock-app-tile" title="音乐" @click="handleDockHint('媒体')">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 17V6l10-2v11" />
-          <circle cx="6.5" cy="17.5" r="2.5" />
-          <circle cx="16.5" cy="15.5" r="2.5" />
-        </svg>
-      </button>
-      <button class="dock-app-tile is-active" title="AI 宠物壁纸" @click="handleHomeClick">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-          <circle cx="7.5" cy="9" r="1.8" />
-          <circle cx="12" cy="7.2" r="1.8" />
-          <circle cx="16.5" cy="9" r="1.8" />
-          <path d="M12 11.2c-3 0-5.2 2.2-5.2 4.4 0 1.4 1.1 2.4 2.6 2.4 1 0 1.7-.4 2.6-.4s1.6.4 2.6.4c1.5 0 2.6-1 2.6-2.4 0-2.2-2.2-4.4-5.2-4.4Z" />
-        </svg>
-      </button>
-      <button class="dock-app-tile" title="车辆设置" @click="handleDockHint('车辆控制')">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke-linecap="round" />
-        </svg>
-      </button>
-      <button class="dock-app-tile" title="应用中心" @click="handleDockHint('应用中心')">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
-          <rect x="4" y="4" width="6.5" height="6.5" rx="1.8" />
-          <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8" />
-          <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8" />
-          <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8" />
-        </svg>
+      <button
+        v-for="app in dockApps"
+        :key="app.label"
+        class="dock-app-tile"
+        :class="{ 'music-tile': app.label === '音乐' }"
+        :title="app.label"
+        @click="handleDockHint(app.label)"
+      >
+        <img :src="app.icon" alt="" />
       </button>
     </div>
-
     <div class="dock-right">
       <button class="dock-icon-btn" title="除雾" @click="handleDockHint('前挡除雾')">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M5 14c1-4 3-7 7-7s6 3 7 7H5Z" />
-          <path d="M9 17v2M12 17v2M15 17v2" stroke-linecap="round" />
-        </svg>
+        <img :src="defrostIcon" alt="" />
       </button>
       <button class="dock-icon-btn" title="循环模式" @click="handleDockHint('空气循环')">
-        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M4 13h16l-1.8-4H7.2L4 13Z" />
-          <circle cx="7.5" cy="15.5" r="1.5" />
-          <circle cx="16.5" cy="15.5" r="1.5" />
-        </svg>
+        <img :src="circulationIcon" alt="" />
       </button>
       <span class="temp-text">21.5°</span>
       <button class="dock-icon-btn" title="音量" @click="handleDockHint('音量')">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9">
-          <path d="M5 10v4h3.5l4.5 3.5V6.5L8.5 10H5Z" />
-          <path d="M16.5 9a4.5 4.5 0 0 1 0 6" stroke-linecap="round" />
-        </svg>
+        <img :src="volumeIcon" alt="" />
       </button>
     </div>
   </footer>
@@ -138,6 +121,13 @@ function handleDockHint(label: string) {
   gap: 16px;
 }
 
+.dock-center {
+  position: absolute;
+  left: 50%;
+  gap: clamp(8px, 2.1875vw, 56px);
+  transform: translateX(-50%);
+}
+
 .dock-icon-btn {
   display: inline-flex;
   align-items: center;
@@ -147,6 +137,16 @@ function handleDockHint(label: string) {
   border-radius: 8px;
   color: inherit;
   opacity: 0.85;
+}
+
+.dock-icon-btn img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.is-dark-stage .dock-icon-btn img {
+  filter: brightness(0) invert(1);
 }
 
 .dock-icon-btn:hover {
@@ -165,8 +165,9 @@ function handleDockHint(label: string) {
 }
 
 .dock-app-tile {
-  width: 26px;
-  height: 26px;
+  width: clamp(24px, 2.8125vw, 72px);
+  height: clamp(24px, 2.8125vw, 72px);
+  padding: 0;
   border-radius: 7px;
   background: #121628;
   color: #ffffff;
@@ -175,19 +176,92 @@ function handleDockHint(label: string) {
   justify-content: center;
 }
 
-.dock-app-tile.is-active {
-  background: #4981f2;
-  color: #ffffff;
-  box-shadow: 0 3px 10px rgba(73, 129, 242, 0.45);
+.dock-app-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.is-dark-stage .dock-app-tile {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+.car-bottom-dock .dock-app-tile:has(img) {
+  background: transparent;
 }
 
-.is-dark-stage .dock-app-tile.is-active {
-  background: #66b2ff;
-  color: #121628;
+/* 底栏控件使用 MasterGo 画板的相对位置。 */
+.car-bottom-dock.mastergo-dock {
+  height: calc(128 * var(--mastergo-unit));
+  padding: 0;
+}
+
+.mastergo-dock .dock-left,
+.mastergo-dock .dock-right {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 0;
+}
+
+.mastergo-dock .dock-left {
+  left: calc(50vw - 1200 * var(--mastergo-unit));
+  grid-template-columns: calc(48 * var(--mastergo-unit)) calc(228 * var(--mastergo-unit))
+    calc(48 * var(--mastergo-unit)) calc(48 * var(--mastergo-unit));
+  column-gap: calc(80 * var(--mastergo-unit));
+}
+
+.mastergo-dock .dock-right {
+  right: calc(50vw - 1200 * var(--mastergo-unit));
+  grid-template-columns:
+    calc(48 * var(--mastergo-unit)) calc(92 * var(--mastergo-unit))
+    calc(60 * var(--mastergo-unit)) calc(64 * var(--mastergo-unit))
+    calc(228 * var(--mastergo-unit)) calc(80 * var(--mastergo-unit))
+    calc(48 * var(--mastergo-unit));
+}
+
+.mastergo-dock .dock-right > :nth-child(2) { grid-column: 3; }
+.mastergo-dock .dock-right > :nth-child(3) { grid-column: 5; }
+.mastergo-dock .dock-right > :nth-child(4) { grid-column: 7; }
+
+.mastergo-dock .dock-icon-btn {
+  width: 100%;
+  height: calc(68 * var(--mastergo-unit));
+  padding: 0;
+  opacity: 1;
+}
+
+.mastergo-dock .dock-icon-btn img {
+  width: calc(42 * var(--mastergo-unit));
+  height: calc(42 * var(--mastergo-unit));
+}
+
+.mastergo-dock .dock-right > :nth-child(2) img {
+  width: calc(60 * var(--mastergo-unit));
+}
+
+.mastergo-dock .temp-text {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  background: url("../assets/mastergo/dock-temperature-arrows.svg") center / 100% auto no-repeat;
+  font-size: calc(56 * var(--mastergo-unit));
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.mastergo-dock .dock-center {
+  gap: calc(56 * var(--mastergo-unit));
+}
+
+.mastergo-dock .dock-app-tile {
+  width: calc(72 * var(--mastergo-unit));
+  height: calc(72 * var(--mastergo-unit));
+}
+
+.car-bottom-dock.mastergo-dock .music-tile {
+  background: linear-gradient(180deg, #fff, #ededed);
+  border-radius: calc(16 * var(--mastergo-unit));
+}
+
+.mastergo-dock .music-tile img {
+  width: calc(32.4 * var(--mastergo-unit));
+  height: calc(47.15 * var(--mastergo-unit));
 }
 </style>

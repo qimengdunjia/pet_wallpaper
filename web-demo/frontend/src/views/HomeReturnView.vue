@@ -1,5 +1,7 @@
+<!-- 文件用途：提供再次进入已保存壁纸的入口，使用 MasterGo 首页的环境素材。 -->
 <script setup lang="ts">
 import { computed } from "vue";
+import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
 import { getFirstReadyPet, petState } from "@/stores/petStore";
 import { activatePetWallpaper } from "@/stores/playerStore";
 import { guardParkedAction, setRoute, showToast, systemState } from "@/stores/systemStore";
@@ -46,13 +48,12 @@ function handleAddPet() {
 </script>
 
 <template>
-  <section class="home-screen" data-testid="home-return-view">
+  <section class="home-screen mastergo-cloud-sky" data-testid="home-return-view">
     <!-- 底部草绿渐变氛围 -->
     <div class="home-meadow-strip" aria-hidden="true" />
 
     <div class="home-layout">
       <div class="home-left">
-        <span class="pill-tag success">APP 首页常态 · 欢迎回来</span>
         <template v-if="featuredPet">
           <h1 class="home-pet-hero sky-gradient-title">
             {{ featuredPet.pet.name }}
@@ -63,7 +64,6 @@ function handleAddPet() {
               {{ featuredPet.pet.gender === "弟弟" ? "♂ 弟弟" : featuredPet.pet.gender === "妹妹" ? "♀ 妹妹" : "未设置性别" }}
             </span>
           </div>
-          <p class="home-desc">已保存上次使用的宠物壁纸形象与三热区互动动画，无需重新生成。</p>
         </template>
         <template v-else>
           <h1 class="home-pet-hero sky-gradient-title">欢迎回来</h1>
@@ -76,7 +76,7 @@ function handleAddPet() {
             data-testid="home-enter-wallpaper-btn"
             @click="handleEnterWallpaper"
           >
-            {{ featuredPet ? "进入壁纸 →" : "创建我的宠物档案 →" }}
+            {{ featuredPet ? "进入壁纸" : "创建我的宠物档案" }}
           </button>
           <button
             class="btn btn-ghost"
@@ -100,6 +100,7 @@ function handleAddPet() {
           />
         </div>
       </div>
+      <img v-else :src="wallpaperDog" alt="" class="home-dog-art" />
     </div>
   </section>
 </template>
@@ -123,10 +124,20 @@ function handleAddPet() {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 165px;
+  height: 25%;
   background: var(--bg-meadow-floor);
   pointer-events: none;
   z-index: 1;
+}
+
+.home-screen::before {
+  left: -10.74%;
+  top: 54.17%;
+}
+
+.home-screen::after {
+  left: 67.58%;
+  top: 0;
 }
 
 .home-layout {
@@ -196,6 +207,12 @@ function handleAddPet() {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.home-dog-art {
+  justify-self: center;
+  width: min(34vw, 48vh);
+  pointer-events: none;
 }
 
 .saved-header {

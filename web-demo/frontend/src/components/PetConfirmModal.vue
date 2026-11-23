@@ -1,4 +1,8 @@
+<!-- 文件用途：预览待切换壁纸、进入档案编辑或确认切换。 -->
 <script setup lang="ts">
+import backChevron from "@/assets/mastergo/back-chevron.svg";
+import catIllustration from "@/assets/mastergo/cat.png";
+import wallpaperScene from "@/assets/mastergo/wallpaper-scene.png";
 import { computed, ref } from "vue";
 import { findPetById } from "@/stores/petStore";
 import { activatePetWallpaper, closePetSelector, playerState } from "@/stores/playerStore";
@@ -6,6 +10,9 @@ import { guardParkedAction, showToast } from "@/stores/systemStore";
 
 const switching = ref(false);
 const targetPet = computed(() => findPetById(playerState.confirmingPetId));
+const petPreview = computed(
+  () => targetPet.value?.active_assets?.idle_image.url || targetPet.value?.original_photo_url,
+);
 
 function handleBackToList() {
   playerState.confirmingPetId = null;
@@ -39,7 +46,7 @@ async function handleConfirmUse() {
 <template>
   <div
     v-if="playerState.selectorOpen && targetPet && !playerState.editingPetId"
-    class="sky-full-overlay confirm-screen"
+    class="sky-full-overlay confirm-screen mastergo-cloud-sky"
     data-testid="pet-confirm-modal"
     @click.stop
   >
@@ -50,9 +57,7 @@ async function handleConfirmUse() {
         data-testid="confirm-back-list-btn"
         @click="handleBackToList"
       >
-        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12.5 5 7.5 10l5 5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <img :src="backChevron" alt="" />
       </button>
       <h1>选择一只宠物</h1>
       <span class="header-spacer" />
@@ -62,11 +67,11 @@ async function handleConfirmUse() {
       <div class="confirm-preview-box">
         <div class="confirm-img-frame">
           <img
-            :src="targetPet.active_assets?.idle_image.url || targetPet.original_photo_url || ''"
-            :alt="targetPet.name"
+            :src="petPreview || (targetPet.species === 'cat' ? catIllustration : wallpaperScene)"
+            :class="{ 'confirm-art-placeholder': !petPreview && targetPet.species === 'cat' }"
+            :alt="petPreview ? targetPet.name : '宠物壁纸示例'"
           />
         </div>
-        <p class="preview-caption">加载已生成形象与互动动画，不再重新生成 AI 资源</p>
       </div>
 
       <div class="confirm-right-col">
@@ -104,6 +109,7 @@ async function handleConfirmUse() {
 <style scoped>
 .confirm-screen {
   justify-content: space-between;
+  padding-top: max(50px, 10.625vh);
 }
 
 .confirm-header {
@@ -125,11 +131,11 @@ async function handleConfirmUse() {
 
 .confirm-body {
   flex: 1;
-  width: min(1060px, 94vw);
+  width: min(82.62vw, 146.875vh);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1.45fr 1fr;
-  gap: 54px;
+  grid-template-columns: minmax(0, 1323fr) minmax(0, 600fr);
+  gap: 9.08%;
   align-items: center;
 }
 
@@ -141,12 +147,10 @@ async function handleConfirmUse() {
 
 .confirm-img-frame {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 30px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 2px solid rgba(255, 255, 255, 0.94);
-  box-shadow: 0 20px 46px rgba(42, 85, 148, 0.16);
+  aspect-ratio: 1323 / 799;
+  border-radius: clamp(14px, calc(50.49 * var(--mastergo-unit)), 51px);
+  padding: clamp(7px, 2.46vw, 63px);
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .confirm-img-frame img {
@@ -157,11 +161,8 @@ async function handleConfirmUse() {
   background: var(--surface-frame-blue);
 }
 
-.preview-caption {
-  margin: 0;
-  text-align: center;
-  font-size: 12.5px;
-  color: #536478;
+.confirm-img-frame .confirm-art-placeholder {
+  object-fit: contain;
 }
 
 .confirm-right-col {
@@ -173,7 +174,7 @@ async function handleConfirmUse() {
 
 .pet-hero-name {
   margin: 0;
-  font-size: 56px;
+  font-size: clamp(24px, 4.1vw, 105px);
   font-weight: 800;
   line-height: 1.08;
   text-align: center;
@@ -198,12 +199,32 @@ async function handleConfirmUse() {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: 230px;
+  width: 100%;
 }
 
 .stack-btn {
   width: 100%;
-  height: 48px;
-  font-size: 15px;
+  height: clamp(35px, 8.33vh, 120px);
+  font-size: clamp(13px, 1.45vw, 37px);
+}
+
+@media (max-height: 500px) {
+  .confirm-screen {
+    padding-inline: 18px;
+  }
+
+  .confirm-right-col,
+  .confirm-actions-stack {
+    gap: 8px;
+  }
+
+  .confirm-actions-stack {
+    margin-top: 0;
+  }
+
+  .meta-line {
+    gap: 8px;
+    font-size: 12px;
+  }
 }
 </style>

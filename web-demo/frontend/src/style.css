@@ -1,5 +1,8 @@
+/* 文件用途：定义网页 Demo 的颜色、排版和公共控件样式。 */
 :root {
-  --bg-sky: linear-gradient(180deg, #85C0FF 0%, #B2D7FF 24%, #E7F0FF 100%);
+  --mastergo-unit: min(calc(100vw / 2560), calc(100vh / 1440));
+  --bg-sky: linear-gradient(180deg, #85C0FF 0%, #B2D7FF 13%, #E7F0FF 100%);
+  --bg-profile-sky: linear-gradient(180deg, #96BEFA 0%, #BAD5FB 13%, #E8EEFE 100%);
   --bg-meadow-floor: linear-gradient(180deg, #9AD985 8%, #F3FFB2 100%);
   --glass-white: linear-gradient(148deg, rgba(255, 255, 255, 0.88) 13%, rgba(255, 255, 255, 0.68) 86%);
   --glass-pill: rgba(255, 255, 255, 0.72);
@@ -91,6 +94,54 @@ button:disabled {
   width: 100%;
   height: 100%;
   background: var(--bg-sky);
+}
+
+/* 证件页两列与背景分别定位，原始矢量保留在独立图层中。 */
+.profile-card-art {
+  position: absolute;
+  top: max(0px, calc((100vh - 56.25vw) / 2));
+  left: 50%;
+  width: min(64.53125vw, 114.7222vh);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.profile-card-foreground {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: calc(2560 * var(--mastergo-unit));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* 两个云朵图层按设计画板的坐标和透明度摆放。 */
+.mastergo-cloud-sky {
+  isolation: isolate;
+}
+
+.mastergo-cloud-sky::before,
+.mastergo-cloud-sky::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 49%;
+  aspect-ratio: 480 / 249;
+  background: url("./assets/mastergo/clouds.png") center / contain no-repeat;
+  opacity: 0.3;
+  transform: scaleX(-1);
+  pointer-events: none;
+}
+
+.mastergo-cloud-sky::before {
+  left: -16.84%;
+  top: 62.22%;
+}
+
+.mastergo-cloud-sky::after {
+  left: 70.74%;
+  top: 60.56%;
 }
 
 .btn {
@@ -199,6 +250,11 @@ button:disabled {
 
 .circle-back-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.78);
+}
+
+.circle-back-btn img {
+  width: 8px;
+  height: 14px;
 }
 
 .glass-panel {

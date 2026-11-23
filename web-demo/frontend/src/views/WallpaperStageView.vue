@@ -1,4 +1,6 @@
+<!-- 文件用途：在等比画布播放宠物壁纸，管理热区、模式按钮与宠物弹层。 -->
 <script setup lang="ts">
+import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { hotzoneLabel, resolveHotzone } from "@/lib/hotzone";
 import { findPetById } from "@/stores/petStore";
@@ -146,7 +148,7 @@ function handleExitWallpaper() {
   >
     <div
       ref="canvasRef"
-      class="wallpaper-canvas-16x9"
+      class="wallpaper-canvas-16x9 mastergo-cloud-sky"
       :data-playback-state="playerState.playbackState"
       :data-active-action="playerState.activeAction || ''"
       data-testid="wallpaper-canvas"
@@ -174,8 +176,11 @@ function handleExitWallpaper() {
           @ended="handleVideoEnded(slot)"
         />
       </template>
+      <div v-else class="wallpaper-placeholder" aria-hidden="true">
+        <img :src="wallpaperDog" alt="" />
+      </div>
 
-      <!-- MasterGo 屏 16 同款左上悬浮大号渐变时钟（不拦截画布点击） -->
+      <!-- 悬浮时钟与宠物状态不拦截画布点击。 -->
       <div class="floating-stage-info">
         <div class="floating-clock" :class="{ dimmed: isPlaying }">{{ clockText }}</div>
         <div class="pet-pill-badge">
@@ -216,7 +221,7 @@ function handleExitWallpaper() {
         正在校验并切换壁纸...
       </div>
 
-      <!-- 严格对齐 MasterGo 屏 09 / 屏 16 底部左右三大胶囊操作钮 -->
+      <!-- 按钮尺寸和间距取自 MasterGo 屏 09（3:2720、3:2729、3:2730）。 -->
       <div class="mode-controls-bar" data-testid="mode-controls-bar" @click.stop>
         <div class="mode-left-group">
           <button
@@ -225,9 +230,6 @@ function handleExitWallpaper() {
             data-testid="switch-pet-btn"
             @click="handleOpenSelector"
           >
-            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M4 7h11l-3-3M16 13H5l3 3" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
             <span>切换宠物</span>
           </button>
           <button
@@ -236,9 +238,6 @@ function handleExitWallpaper() {
             data-testid="add-pet-btn"
             @click="handleAddPet"
           >
-            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 4v12M4 10h12" stroke-linecap="round" />
-            </svg>
             <span>新增宠物</span>
           </button>
         </div>
@@ -264,8 +263,6 @@ function handleExitWallpaper() {
   position: relative;
   width: 100vw;
   height: 100vh;
-  padding-top: 46px;
-  padding-bottom: 44px;
   background: #04060a;
   display: flex;
   align-items: center;
@@ -275,12 +272,27 @@ function handleExitWallpaper() {
 
 .wallpaper-canvas-16x9 {
   position: relative;
-  width: min(100vw, calc((100vh - 90px) * 16 / 9));
+  width: min(100vw, calc(100vh * 16 / 9));
   aspect-ratio: 16 / 9;
-  background: #0b1019;
+  container-type: inline-size;
+  background: var(--bg-sky);
   overflow: hidden;
   cursor: pointer;
   box-shadow: 0 22px 72px rgba(0, 0, 0, 0.78);
+}
+
+.wallpaper-placeholder {
+  position: absolute;
+  inset: 74.861% 0 0;
+  background: var(--bg-meadow-floor);
+  pointer-events: none;
+}
+
+.wallpaper-placeholder img {
+  position: absolute;
+  left: 42.89%;
+  bottom: 0;
+  width: 35.625%;
 }
 
 .stage-media {
@@ -307,7 +319,7 @@ function handleExitWallpaper() {
 
 .floating-stage-info {
   position: absolute;
-  top: 22px;
+  top: max(58px, 10%);
   left: 28px;
   z-index: 7;
   pointer-events: none;
@@ -391,7 +403,7 @@ function handleExitWallpaper() {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 16px;
+  padding-top: 56px;
 }
 
 .zone-box:last-child {
@@ -422,7 +434,7 @@ function handleExitWallpaper() {
 
 .switching-banner {
   position: absolute;
-  top: 20px;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 14;
@@ -436,33 +448,39 @@ function handleExitWallpaper() {
 
 .mode-controls-bar {
   position: absolute;
-  bottom: 20px;
-  left: 26px;
-  right: 26px;
+  bottom: max(48px, 12.222%);
+  inset-inline: 5.078%;
   z-index: 25;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  pointer-events: auto;
+  pointer-events: none;
   cursor: default;
 }
 
 .mode-left-group {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 2.344cqw;
+}
+
+.mode-controls-bar button {
+  width: max(84px, 16.406cqw);
+  height: max(36px, 4.688cqw);
+  padding: 0 4px;
+  pointer-events: auto;
+  font-size: clamp(11px, 1.45cqw, 36px);
+  white-space: nowrap;
 }
 
 .mode-glass-btn {
-  height: 44px;
-  padding: 0 22px;
-  background: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1.5px solid rgba(255, 255, 255, 0.92);
+  border: none;
   color: #121628;
-  font-size: 14px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  box-shadow: inset -2px -2px 10px rgba(255, 255, 255, 0.3),
+    inset 2px 0 10px rgba(255, 255, 255, 0.3);
 }
 
 .mode-glass-btn:hover:not(:disabled) {
@@ -473,9 +491,4 @@ function handleExitWallpaper() {
   opacity: 0.45;
 }
 
-.mode-exit-btn {
-  height: 44px;
-  padding: 0 26px;
-  font-size: 14px;
-}
 </style>

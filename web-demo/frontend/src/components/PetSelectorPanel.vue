@@ -1,5 +1,11 @@
+<!-- 文件用途：按类型浏览已有宠物，并打开壁纸切换确认页。 -->
 <script setup lang="ts">
+import backChevron from "@/assets/mastergo/back-chevron.svg";
 import { computed, ref, watch } from "vue";
+import tabUnderline from "@/assets/mastergo/selector-tab-underline.svg";
+import selectorChevron from "@/assets/mastergo/selector-chevron.svg";
+import catIllustration from "@/assets/mastergo/cat.png";
+import dogIllustration from "@/assets/mastergo/dog-happy.png";
 import { createIdempotencyKey, submitGeneration } from "@/lib/api";
 import { startWaitingBatch, trackJob } from "@/stores/generationStore";
 import { getPetsBySpecies, petState, upsertPet } from "@/stores/petStore";
@@ -105,7 +111,7 @@ function handleAddFromSelector() {
 <template>
   <div
     v-if="playerState.selectorOpen && !playerState.confirmingPetId && !playerState.editingPetId"
-    class="sky-full-overlay selector-screen"
+    class="sky-full-overlay selector-screen mastergo-cloud-sky"
     data-testid="pet-selector-modal"
     @click.stop
   >
@@ -117,9 +123,7 @@ function handleAddFromSelector() {
         data-testid="selector-cancel-btn"
         @click="closePetSelector"
       >
-        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12.5 5 7.5 10l5 5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <img :src="backChevron" alt="" />
       </button>
 
       <h1>选择一只宠物</h1>
@@ -133,7 +137,7 @@ function handleAddFromSelector() {
       </button>
     </header>
 
-    <!-- 分类导航（带 MasterGo 同款绿色波浪下划线涂鸦） -->
+    <!-- 当前分类使用 MasterGo 原始下划线。 -->
     <div class="species-tabs-row">
       <button
         class="species-tab"
@@ -142,9 +146,7 @@ function handleAddFromSelector() {
         @click="activeTab = 'dog'"
       >
         <span>狗狗 ({{ dogCount }})</span>
-        <svg v-if="activeTab === 'dog'" class="green-squiggle" viewBox="0 0 64 14" fill="none">
-          <path d="M4,8 Q16,2 28,8 T58,6" stroke="#38D115" stroke-width="3.6" stroke-linecap="round" />
-        </svg>
+        <img v-if="activeTab === 'dog'" :src="tabUnderline" alt="" class="green-squiggle" />
       </button>
 
       <button
@@ -154,9 +156,7 @@ function handleAddFromSelector() {
         @click="activeTab = 'cat'"
       >
         <span>猫咪 ({{ catCount }})</span>
-        <svg v-if="activeTab === 'cat'" class="green-squiggle" viewBox="0 0 64 14" fill="none">
-          <path d="M4,8 Q16,2 28,8 T58,6" stroke="#38D115" stroke-width="3.6" stroke-linecap="round" />
-        </svg>
+        <img v-if="activeTab === 'cat'" :src="tabUnderline" alt="" class="green-squiggle" />
       </button>
     </div>
 
@@ -168,9 +168,7 @@ function handleAddFromSelector() {
         aria-label="上一只"
         @click="stepFocus(-1)"
       >
-        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12.5 5 7.5 10l5 5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <img :src="selectorChevron" alt="" />
       </button>
 
       <div class="pet-cards-strip">
@@ -189,10 +187,10 @@ function handleAddFromSelector() {
         >
           <div class="card-blue-frame">
             <img
-              v-if="pet.active_assets?.idle_image.url || pet.original_photo_url"
-              :src="pet.active_assets?.idle_image.url || pet.original_photo_url || ''"
+              :src="pet.active_assets?.idle_image.url || pet.original_photo_url || (pet.species === 'dog' ? dogIllustration : catIllustration)"
               :alt="pet.name"
               class="pet-thumb"
+              :class="{ 'pet-thumb-placeholder': !pet.active_assets?.idle_image.url && !pet.original_photo_url }"
             />
             <span class="pill-tag status-badge" :class="statusInfo(pet).tone">
               {{ statusInfo(pet).text }}
@@ -220,9 +218,7 @@ function handleAddFromSelector() {
         aria-label="下一只"
         @click="stepFocus(1)"
       >
-        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M7.5 5l5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <img :src="selectorChevron" alt="" class="arrow-next" />
       </button>
     </div>
 
@@ -246,12 +242,23 @@ function handleAddFromSelector() {
 .selector-screen {
   justify-content: space-between;
   gap: 12px;
+  padding-top: max(50px, 10.625vh);
+  padding-bottom: max(48px, 13.33vh);
 }
 
 .selector-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+}
+
+.selector-header > :first-child {
+  justify-self: start;
+}
+
+.selector-header > :last-child {
+  justify-self: end;
 }
 
 .selector-header h1 {
@@ -287,8 +294,8 @@ function handleAddFromSelector() {
 }
 
 .green-squiggle {
-  width: 54px;
-  height: 12px;
+  width: clamp(45px, 5.234vw, 134px);
+  height: auto;
 }
 
 .carousel-stage {
@@ -298,6 +305,19 @@ function handleAddFromSelector() {
   justify-content: center;
   gap: 24px;
   min-height: 0;
+}
+
+.arrow-nav {
+  background: rgba(38, 74, 135, 0.24);
+}
+
+.arrow-nav img {
+  width: 10px;
+  height: 19px;
+}
+
+.arrow-next {
+  transform: scaleX(-1);
 }
 
 .pet-cards-strip {
@@ -311,8 +331,8 @@ function handleAddFromSelector() {
 }
 
 .pet-carousel-card {
-  flex: 0 0 220px;
-  padding: 10px;
+  flex: 0 0 clamp(94px, 17.1875vw, 440px);
+  padding: clamp(5px, 1.15vw, 30px);
   border-radius: 30px;
   background: rgba(255, 255, 255, 0.72);
   border: 2px solid rgba(255, 255, 255, 0.9);
@@ -325,7 +345,7 @@ function handleAddFromSelector() {
 }
 
 .pet-carousel-card.focused {
-  flex: 0 0 272px;
+  flex: 0 0 clamp(114px, 21.5625vw, 552px);
   background: #ffffff;
   transform: translateY(-4px);
   box-shadow: 0 20px 44px rgba(42, 85, 148, 0.2);
@@ -342,20 +362,24 @@ function handleAddFromSelector() {
 .card-blue-frame {
   position: relative;
   width: 100%;
-  height: 256px;
+  height: clamp(95px, 35.4167vh, 510px);
   border-radius: 22px;
   overflow: hidden;
   background: linear-gradient(180deg, #49a1ff 0%, #beddff 100%);
 }
 
 .focused .card-blue-frame {
-  height: 292px;
+  height: clamp(105px, 40.6944vh, 586px);
 }
 
 .pet-thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.pet-thumb-placeholder {
+  object-fit: contain;
 }
 
 .status-badge {
@@ -410,8 +434,27 @@ function handleAddFromSelector() {
 }
 
 .set-btn {
-  min-width: 210px;
-  height: 46px;
-  font-size: 15px;
+  min-width: max(112px, 16.40625vw);
+  height: clamp(35px, 8.333vh, 120px);
+  font-size: clamp(13px, 1.45vw, 37px);
+}
+
+@media (max-height: 500px) {
+  .selector-screen {
+    gap: 4px;
+    padding-inline: 12px;
+  }
+
+  .selector-header h1 {
+    font-size: 18px;
+  }
+
+  .card-blue-frame {
+    height: 25vh;
+  }
+
+  .focused .card-blue-frame {
+    height: 29vh;
+  }
 }
 </style>

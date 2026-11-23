@@ -1,13 +1,11 @@
+<!-- 文件用途：使用 MasterGo 原始图层展示欢迎页，并进入宠物档案录入。 -->
 <script setup lang="ts">
-import { computed } from "vue";
+import welcomeDecoration from "@/assets/mastergo/welcome-decoration.svg";
+import welcomeCat from "@/assets/mastergo/cat.png";
+import welcomeDog from "@/assets/mastergo/dog-standing.png";
+import welcomeClouds from "@/assets/mastergo/clouds.png";
+import welcomeArrow from "@/assets/mastergo/welcome-next-arrow.svg";
 import { guardParkedAction, setRoute, systemState } from "@/stores/systemStore";
-
-const dogSampleUrl = computed(
-  () => systemState.config?.sample_uploads?.dog || "/api/assets/samples/dog/upload",
-);
-const catSampleUrl = computed(
-  () => systemState.config?.sample_uploads?.cat || "/api/assets/samples/cat/upload",
-);
 
 function handleStart() {
   if (!guardParkedAction("创建宠物档案")) return;
@@ -19,38 +17,25 @@ function handleStart() {
 
 <template>
   <section class="welcome-screen" data-testid="welcome-view">
-    <!-- 左侧 MasterGo 荧光黄绿大花瓣装饰 (#F2FA66) -->
-    <svg class="welcome-petal-bg" viewBox="0 0 900 720" fill="none" aria-hidden="true">
-      <path
-        d="M-60,20 C120,-60 360,-30 410,95 C445,180 390,260 340,295 C460,290 585,365 565,485 C548,595 415,645 315,610 C385,685 385,780 315,820 L-60,820 Z"
-        fill="#F2FA66"
-      />
-    </svg>
-
-    <!-- 右侧萌宠近景视觉图融于晴空背景 -->
-    <div class="welcome-hero-media" aria-hidden="true">
-      <div class="hero-circle-card">
-        <img :src="dogSampleUrl" alt="" class="hero-pet-img" />
+    <div class="welcome-canvas">
+      <div class="welcome-art" aria-hidden="true">
+        <img :src="welcomeClouds" alt="" class="welcome-cloud welcome-cloud-left" />
+        <img :src="welcomeClouds" alt="" class="welcome-cloud welcome-cloud-right" />
+        <img :src="welcomeDecoration" alt="" class="welcome-decoration" />
+        <img :src="welcomeCat" alt="" class="welcome-cat" />
+        <img :src="welcomeDog" alt="" class="welcome-dog" />
       </div>
-      <div class="hero-cat-inset">
-        <img :src="catSampleUrl" alt="" class="hero-pet-img" />
-      </div>
-    </div>
 
-    <!-- 左侧偏中主文案与黑色胶囊按钮 -->
-    <div class="welcome-content">
-      <h1 class="welcome-title">让宠物陪伴每次出行</h1>
-      <p class="welcome-en">Let your pet accompany you on every trip</p>
-      <div class="welcome-cta-wrap">
+      <div class="welcome-content">
+        <h1>让宠物陪伴每次出行</h1>
+        <p>Let your pet accompany you on every trip</p>
         <button
           class="btn btn-black welcome-cta"
           data-testid="welcome-create-btn"
           @click="handleStart"
         >
-          <span>创建我的宠物档案</span>
-          <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 10h10M11 6l4 4-4 4" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
+          创建我的宠物档案
+          <img :src="welcomeArrow" alt="" />
         </button>
       </div>
     </div>
@@ -59,105 +44,105 @@ function handleStart() {
 
 <style scoped>
 .welcome-screen {
-  position: relative;
   flex: 1;
-  width: 100%;
-  height: 100%;
-  padding: 54px 64px 52px;
-  display: flex;
-  align-items: center;
+  display: grid;
+  place-items: center;
   overflow: hidden;
   background: var(--bg-sky);
 }
 
-.welcome-petal-bg {
+.welcome-canvas {
+  /* 原稿以 2560 × 1440 排布。画板等比缩放，窄窗口中仍可操作。 */
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  container-type: size;
+}
+
+.welcome-art {
   position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 68%;
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
-  z-index: 1;
+}
+
+.welcome-art img {
+  position: absolute;
+  display: block;
+}
+
+.welcome-cloud {
+  width: 49%;
+  opacity: 0.3;
+}
+
+.welcome-cloud-left {
+  left: -16.84%;
+  top: 62.22%;
+  transform: scaleX(-1);
+}
+
+.welcome-cloud-right {
+  left: 70.74%;
+  top: 60.56%;
+  transform: scaleX(-1);
+}
+
+.welcome-decoration {
+  left: -10.4%;
+  top: -27.25%;
+  width: 119.03%;
+}
+
+.welcome-cat {
+  left: 2.28%;
+  top: 15.99%;
+  width: 28.75%;
+  transform: rotate(-10deg);
+}
+
+.welcome-dog {
+  left: 71.19%;
+  top: 16.49%;
+  width: 24.79%;
+  transform: rotate(10deg);
 }
 
 .welcome-content {
-  position: relative;
-  z-index: 3;
-  max-width: 560px;
-  margin-left: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  position: absolute;
+  inset: 37.6% 0 auto;
+  display: grid;
+  justify-items: center;
+  text-align: center;
 }
 
-.welcome-title {
+.welcome-content h1 {
   margin: 0;
-  font-size: 46px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: #121628;
-  line-height: 1.18;
+  color: #2c2c2c;
+  font-size: clamp(16px, 3.7cqw, 94px);
+  line-height: 1.15;
 }
 
-.welcome-en {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 400;
-  color: #536478;
-}
-
-.welcome-cta-wrap {
-  margin-top: 22px;
+.welcome-content p {
+  margin: 1cqw 0 0;
+  color: #666666;
+  font-size: clamp(10px, 1.95cqw, 50px);
+  line-height: 1.2;
 }
 
 .welcome-cta {
-  height: 54px;
-  padding: 0 32px;
-  font-size: 17px;
-  font-weight: 600;
-  border-radius: 999px;
+  min-height: 38px;
+  height: 10.28cqh;
+  margin-top: 2.7cqw;
+  padding: 0 2.5cqw;
+  font-size: clamp(12px, 1.75cqw, 45px);
+  white-space: nowrap;
 }
 
-.welcome-hero-media {
-  position: absolute;
-  right: 76px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 440px;
-  height: 410px;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.hero-circle-card {
-  position: absolute;
-  right: 0;
-  top: 16px;
-  width: 356px;
-  height: 356px;
-  border-radius: 56px;
-  overflow: hidden;
-  border: 6px solid rgba(255, 255, 255, 0.78);
-  box-shadow: 0 24px 54px rgba(32, 74, 135, 0.22);
-  background: var(--surface-frame-blue);
-}
-
-.hero-cat-inset {
-  position: absolute;
-  left: 0;
-  bottom: 12px;
-  width: 174px;
-  height: 174px;
-  border-radius: 36px;
-  overflow: hidden;
-  border: 5px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 18px 40px rgba(32, 74, 135, 0.24);
-  background: #dbeafe;
-}
-
-.hero-pet-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.welcome-cta img {
+  width: 1.7cqw;
+  height: 1.7cqw;
+  min-width: 14px;
+  min-height: 14px;
 }
 </style>

@@ -1,5 +1,13 @@
+<!-- 文件用途：显示 MasterGo 车机状态图标、时钟与 Demo 系统操作。 -->
 <script setup lang="ts">
 import { computed } from "vue";
+import avatarArt from "@/assets/mastergo/status-avatar.svg";
+import bluetoothIcon from "@/assets/mastergo/status-bluetooth.svg";
+import cameraIcon from "@/assets/mastergo/status-camera.svg";
+import chargingIcon from "@/assets/mastergo/status-charging.svg";
+import messageIcon from "@/assets/mastergo/status-message.svg";
+import networkIcon from "@/assets/mastergo/status-5g.svg";
+import signalIcon from "@/assets/mastergo/status-signal.svg";
 import { hasActiveBackgroundJobs } from "@/stores/generationStore";
 import { petState } from "@/stores/petStore";
 import { interruptPlayback, playerState } from "@/stores/playerStore";
@@ -12,6 +20,9 @@ import {
 import { useClock } from "@/stores/useClock";
 
 const clockText = useClock();
+const showReferenceStatus = computed(
+  () => !systemState.drawerOpen && (systemState.route === "onboarding-upload" || playerState.selectorOpen),
+);
 
 const isDarkStage = computed(
   () =>
@@ -85,29 +96,35 @@ async function toggleFullscreen() {
 <template>
   <header
     class="system-topbar"
-    :class="{ 'is-dark-stage': isDarkStage }"
+    :class="{ 'is-dark-stage': isDarkStage, 'upload-status': showReferenceStatus }"
     data-testid="system-topbar"
     @click.stop
   >
-    <div class="topbar-left">
+    <div v-if="showReferenceStatus" class="upload-status-icons">
+      <button
+        class="upload-status-avatar"
+        aria-label="演示与规格"
+        title="演示与规格"
+        data-testid="toggle-demo-drawer"
+        @click="systemState.drawerOpen = true"
+      >
+        <img :src="avatarArt" alt="" />
+      </button>
+      <img :src="networkIcon" class="upload-status-network" alt="5G" />
+      <img :src="bluetoothIcon" class="upload-status-bluetooth" alt="" />
+      <span class="upload-status-indicator message-indicator"><img :src="messageIcon" alt="" /></span>
+      <span class="upload-status-indicator camera-indicator"><img :src="cameraIcon" alt="" /></span>
+      <img :src="chargingIcon" alt="" />
+    </div>
+
+    <div v-else class="topbar-left">
       <div class="avatar-dot" title="演示驾驶员">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-          <path d="M12 12a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4Zm0 2.1c-4.1 0-7.5 2.1-7.5 4.7v1.1h15v-1.1c0-2.6-3.4-4.7-7.5-4.7Z" />
-        </svg>
+        <img :src="avatarArt" alt="" />
       </div>
-      <span class="signal-text">5G</span>
-      <svg class="status-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
-        <path d="M3 15v-2M7 15v-4M11 15V9M15 15V6" stroke-linecap="round" />
-      </svg>
-      <svg class="status-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7">
-        <rect x="3" y="4.5" width="14" height="10" rx="2.5" />
-        <path d="M6.5 9.5h7" stroke-linecap="round" />
-      </svg>
-      <svg class="status-svg" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7">
-        <rect x="2.5" y="6" width="13" height="8" rx="2" />
-        <path d="M17.5 8.5v3" stroke-linecap="round" />
-        <rect x="4.5" y="8" width="7" height="4" rx="1" fill="#21AA4C" stroke="none" />
-      </svg>
+      <img class="status-svg" :src="signalIcon" alt="" />
+      <img class="status-svg" :src="networkIcon" alt="5G" />
+      <img class="status-svg" :src="cameraIcon" alt="" />
+      <img class="status-svg status-charging" :src="chargingIcon" alt="" />
 
       <span class="route-pill" data-testid="topbar-route-label">{{ routeLabel }}</span>
 
@@ -129,7 +146,7 @@ async function toggleFullscreen() {
       </span>
     </div>
 
-    <div class="topbar-right">
+    <div v-if="!showReferenceStatus" class="topbar-right">
       <button
         class="top-ctrl-btn driving-btn"
         :class="systemState.drivingMode === 'parked' ? 'is-parked' : 'is-driving'"
@@ -166,10 +183,86 @@ async function toggleFullscreen() {
 
       <span class="clock-text">{{ clockText }}</span>
     </div>
+    <span v-else class="upload-status-clock">{{ clockText }}</span>
   </header>
 </template>
 
 <style scoped>
+.system-topbar.upload-status {
+  height: calc(120 * var(--mastergo-unit));
+  padding-inline:
+    calc(50vw - 1248 * var(--mastergo-unit))
+    calc(50vw - 1208 * var(--mastergo-unit));
+}
+
+.upload-status-icons {
+  display: grid;
+  grid-template-columns: repeat(6, calc(120 * var(--mastergo-unit)));
+  place-items: center;
+}
+
+.upload-status-avatar {
+  width: calc(56 * var(--mastergo-unit));
+  height: calc(56 * var(--mastergo-unit));
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgb(255 255 255 / 25%);
+  background: linear-gradient(135deg, rgb(255 255 255 / 12%), transparent 49%, rgb(255 255 255 / 8%));
+  translate: calc(16 * var(--mastergo-unit)) 0;
+}
+
+.upload-status-icons img {
+  display: block;
+  width: calc(35 * var(--mastergo-unit));
+  height: auto;
+}
+
+.upload-status-avatar img,
+.avatar-dot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.upload-status-icons .upload-status-network {
+  width: calc(19 * var(--mastergo-unit));
+  transform: translateY(calc(-12 * var(--mastergo-unit)));
+}
+
+.upload-status-icons .upload-status-bluetooth {
+  width: calc(24 * var(--mastergo-unit));
+}
+
+.upload-status-indicator {
+  position: relative;
+}
+
+.upload-status-indicator::after {
+  content: "";
+  position: absolute;
+  width: calc(8 * var(--mastergo-unit));
+  height: calc(8 * var(--mastergo-unit));
+  border-radius: 50%;
+  background: #e24f4f;
+}
+
+.message-indicator::after {
+  top: 0;
+  right: 0;
+}
+
+.camera-indicator::after {
+  top: 36%;
+  left: 26%;
+}
+
+.upload-status-clock {
+  color: #121628;
+  font-size: clamp(14px, calc(40 * var(--mastergo-unit)), 40px);
+  font-variant-numeric: tabular-nums;
+}
+
 .system-topbar {
   position: fixed;
   top: 0;
@@ -209,16 +302,19 @@ async function toggleFullscreen() {
   box-shadow: 0 2px 6px rgba(18, 28, 79, 0.12);
 }
 
-.signal-text {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
 .status-svg {
   width: 17px;
   height: 17px;
+  object-fit: contain;
   opacity: 0.85;
+}
+
+.is-dark-stage .status-svg:not(.status-charging) {
+  filter: brightness(0) invert(1);
+}
+
+.is-dark-stage .status-charging {
+  filter: drop-shadow(0 0 1px #fff);
 }
 
 .route-pill {

@@ -1,4 +1,9 @@
+<!-- 文件用途：展示已选宠物的证件卡并保存可编辑的档案字段。 -->
 <script setup lang="ts">
+import backChevron from "@/assets/mastergo/back-chevron.svg";
+import profileCardArt from "@/assets/mastergo/edit-card-frame.svg";
+import profileCardForeground from "@/assets/mastergo/edit-card-foreground.svg";
+import profileCardWordmark from "@/assets/mastergo/edit-card-wordmark.svg";
 import { computed, ref, watch } from "vue";
 import { updatePet } from "@/lib/api";
 import { findPetById, upsertPet } from "@/stores/petStore";
@@ -61,17 +66,12 @@ async function handleSave() {
 <template>
   <div
     v-if="playerState.editingPetId && targetPet"
-    class="sky-full-overlay edit-screen"
+    class="sky-full-overlay edit-screen mastergo-cloud-sky"
     data-testid="pet-edit-modal"
     @click.stop
   >
-    <svg class="deco-burst" viewBox="0 0 120 120" fill="none" aria-hidden="true">
-      <path
-        d="M60,8 L72,34 L98,20 L86,46 L114,56 L88,68 L104,94 L74,84 L62,112 L48,84 L18,94 L32,68 L6,56 L34,46 L22,20 L48,34 Z"
-        fill="#6DA3FF"
-        opacity="0.72"
-      />
-    </svg>
+    <img :src="profileCardArt" alt="" class="profile-card-art" />
+    <img :src="profileCardForeground" alt="" class="profile-card-foreground" />
 
     <header class="edit-top">
       <button
@@ -80,29 +80,14 @@ async function handleSave() {
         data-testid="edit-pet-cancel-btn"
         @click="handleCancel"
       >
-        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12.5 5 7.5 10l5 5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        <img :src="backChevron" alt="" />
       </button>
       <h1>编辑宠物信息</h1>
     </header>
 
     <div class="house-wrapper">
-      <svg class="ribbon-deco" viewBox="0 0 120 120" fill="none" aria-hidden="true">
-        <path
-          d="M20,90 C28,42 54,18 92,22"
-          stroke="#276ADE"
-          stroke-width="22"
-          stroke-linecap="round"
-        />
-      </svg>
-
-      <svg class="house-roof" viewBox="0 0 1000 90" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M0,90 L0,76 L486,6 Q500,2 514,6 L1000,76 L1000,90 Z" fill="#FFFFFF" />
-      </svg>
-
       <div class="house-body">
-        <div class="id-card-watermark" aria-hidden="true">ID CARD</div>
+        <img :src="profileCardWordmark" alt="" class="id-card-watermark" />
 
         <div class="edit-grid">
           <div class="edit-photo-frame">
@@ -174,88 +159,67 @@ async function handleSave() {
   align-items: center;
   justify-content: space-between;
   padding: 50px 44px 54px;
-}
-
-.deco-burst {
-  position: absolute;
-  right: -12px;
-  bottom: 92px;
-  width: 112px;
-  height: 112px;
-  pointer-events: none;
-  z-index: 1;
+  background: var(--bg-profile-sky);
 }
 
 .edit-top {
-  width: 100%;
+  position: absolute;
+  top: calc(50% - 559 * var(--mastergo-unit));
+  left: calc(50% - 1196 * var(--mastergo-unit));
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: calc(48 * var(--mastergo-unit));
+  z-index: 3;
 }
 
 .edit-top h1 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  color: #121628;
+  font-size: clamp(16px, calc(48 * var(--mastergo-unit)), 48px);
+  font-weight: 500;
+  color: #2c2c2c;
+}
+
+.edit-top .circle-back-btn {
+  width: calc(100 * var(--mastergo-unit));
+  height: calc(100 * var(--mastergo-unit));
+}
+
+.edit-top .circle-back-btn img {
+  width: calc(15 * var(--mastergo-unit));
+  height: calc(25 * var(--mastergo-unit));
 }
 
 .house-wrapper {
-  position: relative;
-  width: min(900px, 90vw);
-  margin-bottom: 16px;
-  filter: drop-shadow(0 20px 48px rgba(42, 85, 148, 0.16));
-}
-
-.ribbon-deco {
   position: absolute;
-  left: 52%;
-  top: -36px;
-  width: 62px;
-  height: 62px;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.house-roof {
-  display: block;
-  width: 100%;
-  height: 54px;
-  margin-bottom: -2px;
-  position: relative;
+  top: 34.444vh;
+  width: min(64.53125vw, 114.7222vh);
   z-index: 2;
 }
 
 .house-body {
   position: relative;
-  z-index: 2;
-  background: #ffffff;
-  border-radius: 0 0 36px 36px;
-  padding: 16px 42px 48px;
+  padding: 0 4.84%;
 }
 
 .id-card-watermark {
   position: absolute;
-  right: 36px;
-  top: -12px;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #8fc4ff;
+  right: calc(109 * var(--mastergo-unit));
+  top: calc(-90 * var(--mastergo-unit));
+  width: calc(320 * var(--mastergo-unit));
   pointer-events: none;
 }
 
 .edit-grid {
   display: grid;
-  grid-template-columns: 270px 1fr;
-  gap: 32px;
+  grid-template-columns: minmax(0, 480fr) minmax(0, 952fr);
+  gap: 4.02%;
   align-items: center;
 }
 
 .edit-photo-frame {
   width: 100%;
-  height: 244px;
-  border-radius: 26px;
+  height: min(23.4375vw, 41.6667vh);
+  border-radius: clamp(12px, 1.875vw, 48px);
   overflow: hidden;
   background: var(--surface-frame-blue);
 }
@@ -267,63 +231,97 @@ async function handleSave() {
 }
 
 .edit-form {
+  height: min(23.4375vw, 41.6667vh);
+  padding: calc(48 * var(--mastergo-unit)) calc(80 * var(--mastergo-unit)) 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(48 * var(--mastergo-unit));
+  border-radius: clamp(12px, 1.875vw, 48px);
+  background: #fff;
 }
 
 .form-section-title {
   text-align: center;
-  font-size: 16px;
-  font-weight: 700;
-  color: #121628;
+  height: calc(48 * var(--mastergo-unit));
+  line-height: calc(48 * var(--mastergo-unit));
+  font-size: clamp(12px, calc(36 * var(--mastergo-unit)), 36px);
+  font-weight: 500;
+  color: #2c2c2c;
 }
 
 .form-row {
   display: grid;
-  grid-template-columns: 78px 1fr;
+  grid-template-columns: calc(160 * var(--mastergo-unit)) minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: calc(32 * var(--mastergo-unit));
 }
 
 .row-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #536478;
+  font-size: clamp(11px, calc(32 * var(--mastergo-unit)), 32px);
+  font-weight: 400;
+  color: #666;
+  white-space: nowrap;
 }
 
 .gender-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: calc(32 * var(--mastergo-unit));
 }
 
-.gender-btn {
-  height: 40px;
-  border-radius: 13px;
-  background: #eff2f7;
+.edit-form :is(.input-field, .gender-btn) {
+  height: calc(100 * var(--mastergo-unit));
+  min-height: 0;
+  border: 0;
+  border-radius: calc(24 * var(--mastergo-unit));
+  background: rgba(79, 108, 164, 0.08);
   color: #121628;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: clamp(11px, calc(32 * var(--mastergo-unit)), 32px);
+  font-weight: 400;
 }
 
-.gender-btn.active {
+.edit-form .input-field {
+  padding: 0 calc(34 * var(--mastergo-unit));
+}
+
+.edit-form .gender-btn.active {
   background: #ddfd66;
-  color: #121628;
 }
 
 .save-cta-btn {
   position: absolute;
   left: 50%;
-  bottom: -24px;
+  top: calc(100% + 3.89vh);
   transform: translateX(-50%);
-  min-width: 210px;
-  height: 48px;
+  min-width: max(105px, 16.406vw);
+  height: max(36px, 8.333vh);
   font-size: 16px;
   z-index: 5;
 }
 
 .save-cta-btn:active:not(:disabled) {
   transform: translateX(-50%) scale(0.97);
+}
+
+@media (max-height: 440px) {
+  .house-wrapper {
+    top: 31vh;
+  }
+
+  .edit-form {
+    gap: 8px;
+    padding-top: 7px;
+  }
+
+  .edit-form :is(.input-field, .gender-btn) {
+    min-height: 24px;
+    height: 25px;
+    padding-block: 0;
+  }
+
+  .form-row {
+    grid-template-columns: 65px minmax(0, 1fr);
+    gap: 4px;
+  }
 }
 </style>
