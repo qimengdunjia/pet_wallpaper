@@ -1,0 +1,147 @@
+{
+  "version": "1.0.0",
+  "target_spec": {
+    "width": 1920,
+    "height": 1080,
+    "aspect_ratio": "16:9",
+    "fps": 24
+  },
+  "transitions": {
+    "intro": {
+      "path": "transitions/intro-3s.mp4",
+      "format": "mp4",
+      "mime": "video/mp4",
+      "width": 1920,
+      "height": 1080,
+      "fps": 24.0,
+      "duration": 3.0,
+      "aspect_ratio": "16:9",
+      "size_bytes": 174951
+    },
+    "loop": {
+      "path": "transitions/chase-loop-7s.mp4",
+      "format": "mp4",
+      "mime": "video/mp4",
+      "width": 1920,
+      "height": 1080,
+      "fps": 24.0,
+      "duration": 7.0,
+      "aspect_ratio": "16:9",
+      "size_bytes": 398648
+    }
+  },
+  "samples": {
+    "cat": {
+      "idle_image": {
+        "path": "samples/cat/idle.jpg",
+        "format": "jpeg",
+        "mime": "image/jpeg",
+        "width": 1920,
+        "height": 1080,
+        "size_bytes": 114052
+      },
+      "sample_upload": {
+        "path": "samples/cat/sample-upload.jpg",
+        "format": "jpeg",
+        "mime": "image/jpeg",
+        "width": 1920,
+        "height": 1072,
+        "size_bytes": 317897
+      },
+      "actions": {
+        "left": {
+          "path": "samples/cat/left.mp4",
+          "origin": "algorithm-lab:373de869ef4f44e085e15e937462a69a",
+          "format": "mp4",
+          "mime": "video/mp4",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24.0,
+          "duration": 4.042,
+          "aspect_ratio": "16:9",
+          "size_bytes": 1621841
+        },
+        "center": {
+          "path": "samples/cat/center.mp4",
+          "origin": "algorithm-lab:0d502cebd0664028b0980a169aface5f",
+          "format": "mp4",
+          "mime": "video/mp4",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24.0,
+          "duration": 4.042,
+          "aspect_ratio": "16:9",
+          "size_bytes": 1494904
+        },
+        "right": {
+          "path": "samples/cat/right.mp4",
+          "origin": "algorithm-lab:0a15f3b35cfb4ccfaa84ffa5ea664a2e",
+          "format": "mp4",
+          "mime": "video/mp4",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24.0,
+          "duration": 4.042,
+          "aspect_ratio": "16:9",
+          "size_bytes": 1601539
+        }
+      }
+    },
+    "dog": {
+      "idle_image": {
+        "path": "samples/dog/idle.jpg",
+        "format": "jpeg",
+        "mime": "image/jpeg",
+        "width": 1920,
+        "height": 1080,
+        "size_bytes": 81005
+      },
+      "sample_upload": {
+        "path": "samples/dog/sample-upload.jpg",
+        "format": "jpeg",
+        "mime": "image/jpeg",
+        "width": 2720,
+        "height": 1536,
+        "size_bytes": 389166
+      },
+      "actions": {
+        "left": {
+          "path": "samples/dog/left.mp4",
+          "origin": "algorithm-lab:5c006f5971fa462da4775ce768ad163f",
+          "format": "mp4",
+          "mime": "video/mp4",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24.0,
+          "duration": 4.042,
+          "aspect_ratio": "16:9",
+          "size_bytes": 1127573
+        },
+        "center": {
+          "path": "samples/dog/center.mp4",
+          "origin": "algorithm-lab:4467c7bd9c40421fa5af3fc5b136a41e",
+          "format": "mp4",
+          "mime": "video/mp4",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24.0,
+          "duration": 4.042,
+          "aspect_ratio": "16:9",
+          "size_bytes": 1154989
+        },
+        "right": {
+          "path": "samples/dog/right.mp4",
+          "origin": "algorithm-lab:c75369061dea4ede896d0a91429cf14b",
+          "format": "mp4",
+          "mime": "video/mp4",
+          "width": 1920,
+          "height": 1080,
+          "fps": 24.0,
+          "duration": 4.042,
+          "aspect_ratio": "16:9",
+          "size_bytes": 1107963
+        }
+      }
+    }
+  }
+}

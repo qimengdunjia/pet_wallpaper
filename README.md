@@ -13,7 +13,7 @@
 | [`docs/`](docs/网页Demo开发文档.md) | 产品需求、网页架构和验收 |
 | `scripts/` | 从仓库根启动与测试算法验证工具 |
 
-开发入口见[网页 Demo 开发文档](docs/网页Demo开发文档.md)。行为与素材规格以 [PRD](docs/宠物交互壁纸_PRD.md) 为准，页面流程与设计参考[原型图](原型图.jpg)和 [MasterGo「页面 1」](https://mastergo.com/prototyping/210826940496035?fileOpenFrom=project&page_id=M)。
+开发入口见[网页 Demo 开发文档](docs/网页Demo开发文档.md)。行为与素材规格以 [PRD](docs/宠物交互壁纸_PRD.md) 为准，页面流程与设计参考[原型图](docs/原型图.jpg)和 [MasterGo「页面 1」](https://mastergo.com/prototyping/210826940496035?fileOpenFrom=project&page_id=M)。
 
 ## 算法验证
 
