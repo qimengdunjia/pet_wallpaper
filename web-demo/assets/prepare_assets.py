@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import shutil
@@ -15,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFilter
 ASSETS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = ASSETS_DIR.parent.parent
 ALGO_VIDEOS_DIR = REPO_ROOT / "algorithm-lab" / "data" / "jobs" / "videos"
+DEFAULT_WALLPAPER_DIR = ASSETS_DIR / "default-wallpaper"
 
 WIDTH = 1920
 HEIGHT = 1080
@@ -403,11 +405,20 @@ def _loop_state(u: float) -> tuple[float, float, float, float, float]:
     return cat_x, dog_x, cat_phase, dog_phase, ground_offset
 
 
-def build_transitions() -> dict[str, dict]:
-    """生成 3 秒先导（intro-3s.mp4）和 7 秒追逐循环（chase-loop-7s.mp4）。"""
-    backdrop = _create_backdrop()
+def build_transitions(force_synthetic: bool = False) -> dict[str, dict]:
+    """探测或重建 3 秒先导（intro-3s.mp4）和 7 秒追逐循环（chase-loop-7s.mp4）。"""
     trans_dir = ASSETS_DIR / "transitions"
     trans_dir.mkdir(parents=True, exist_ok=True)
+    intro_path = trans_dir / "intro-3s.mp4"
+    loop_path = trans_dir / "chase-loop-7s.mp4"
+
+    if not force_synthetic and intro_path.is_file() and loop_path.is_file():
+        return {
+            "intro": {"path": "transitions/intro-3s.mp4", **probe_video(intro_path)},
+            "loop": {"path": "transitions/chase-loop-7s.mp4", **probe_video(loop_path)},
+        }
+
+    backdrop = _create_backdrop()
 
     # 1) 7 秒追逐循环 (168 帧)
     loop_frames: list[Image.Image] = []
@@ -422,7 +433,6 @@ def build_transitions() -> dict[str, dict]:
         _draw_running_cat(draw, cat_x, 838, cat_phase, scale=1.0)
         loop_frames.append(frame)
 
-    loop_path = trans_dir / "chase-loop-7s.mp4"
     _encode_frames_ffmpeg(loop_frames, loop_path)
 
     # 2) 3 秒入场先导 (72 帧)，末尾直接对齐 loop 第 0 帧状态
@@ -453,7 +463,6 @@ def build_transitions() -> dict[str, dict]:
         _draw_running_cat(draw, cat_x, 838, cat_phase, scale=1.0)
         intro_frames.append(frame)
 
-    intro_path = trans_dir / "intro-3s.mp4"
     _encode_frames_ffmpeg(intro_frames, intro_path)
 
     return {
@@ -516,22 +525,100 @@ def _build_fallback_action_video(species: str, direction: str, dst: Path) -> Non
     _encode_frames_ffmpeg(frames, dst)
 
 
-def build_samples() -> dict[str, dict]:
-    """规整或生成猫狗三方向样例素材，并提取一致首帧作为 idle.jpg。"""
+def _extract_first_frame(video_path: Path, image_path: Path) -> None:
+    """从视频第 1 帧提取高质量 JPEG 静帧。"""
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            str(image_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+
+def build_default_wallpaper() -> dict | None:
+    """探测默认壁纸资产（动态待机 + 三热区交互），必要时自动提取静态首帧。"""
+    idle_vid = DEFAULT_WALLPAPER_DIR / "idle.mp4"
+    action_files = {slot: DEFAULT_WALLPAPER_DIR / f"{slot}.mp4" for slot in ("left", "center", "right")}
+    if not idle_vid.is_file() or not all(path.is_file() for path in action_files.values()):
+        return None
+
+    idle_img = DEFAULT_WALLPAPER_DIR / "idle.jpg"
+    if not idle_img.is_file():
+        _extract_first_frame(idle_vid, idle_img)
+
+    return {
+        "species": "dog",
+        "name": "默认狗狗",
+        "gender": "未设置",
+        "breed": "默认壁纸",
+        "idle_image": {"path": "default-wallpaper/idle.jpg", **probe_image(idle_img)},
+        "idle_video": {"path": "default-wallpaper/idle.mp4", **probe_video(idle_vid)},
+        "actions": {
+            slot: {"path": f"default-wallpaper/{slot}.mp4", **probe_video(path)}
+            for slot, path in action_files.items()
+        },
+    }
+
+
+def build_samples(force_rebuild: bool = False, existing_manifest: dict | None = None) -> dict[str, dict]:
+    """规整或探测猫狗三方向样例素材，并提取一致首帧作为 idle.jpg。"""
     samples_info: dict[str, dict] = {}
+    existing_samples = (existing_manifest or {}).get("samples", {})
     for species, spec in SOURCE_MAP.items():
         sample_dir = ASSETS_DIR / "samples" / species
         sample_dir.mkdir(parents=True, exist_ok=True)
-        actions_meta: dict[str, dict] = {}
+        idle_path = sample_dir / "idle.jpg"
+        upload_path = sample_dir / "sample-upload.jpg"
+        existing_species = existing_samples.get(species, {})
+        existing_actions = existing_species.get("actions", {})
 
+        has_all_archived = (
+            idle_path.is_file()
+            and upload_path.is_file()
+            and all((sample_dir / f"{direction}.mp4").is_file() for direction in spec["actions"])
+        )
+        has_any_algo_source = any(src.is_file() for src in spec["actions"].values())
+
+        if not force_rebuild and has_all_archived and not has_any_algo_source:
+            actions_meta = {}
+            for direction in spec["actions"]:
+                dst_video = sample_dir / f"{direction}.mp4"
+                origin = existing_actions.get(direction, {}).get("origin", "archived")
+                actions_meta[direction] = {
+                    "path": f"samples/{species}/{direction}.mp4",
+                    "origin": origin,
+                    **probe_video(dst_video),
+                }
+            samples_info[species] = {
+                "idle_image": {"path": f"samples/{species}/idle.jpg", **probe_image(idle_path)},
+                "sample_upload": {"path": f"samples/{species}/sample-upload.jpg", **probe_image(upload_path)},
+                "actions": actions_meta,
+            }
+            continue
+
+        actions_meta = {}
         for direction, src_video in spec["actions"].items():
             dst_video = sample_dir / f"{direction}.mp4"
-            if src_video.is_file():
+            if src_video.is_file() and (force_rebuild or not dst_video.is_file()):
                 _normalize_video_1080p(src_video, dst_video)
                 origin = f"algorithm-lab:{src_video.parent.name}"
-            else:
+            elif not dst_video.is_file():
                 _build_fallback_action_video(species, direction, dst_video)
                 origin = "synthetic-fallback"
+            else:
+                origin = existing_actions.get(direction, {}).get(
+                    "origin", f"algorithm-lab:{src_video.parent.name}" if src_video.is_file() else "archived"
+                )
             actions_meta[direction] = {
                 "path": f"samples/{species}/{direction}.mp4",
                 "origin": origin,
@@ -539,32 +626,17 @@ def build_samples() -> dict[str, dict]:
             }
 
         # 从规整后 left.mp4 第 1 帧提取待机图，保证像素级首尾无缝衔接
-        idle_path = sample_dir / "idle.jpg"
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(sample_dir / "left.mp4"),
-                "-frames:v",
-                "1",
-                "-q:v",
-                "2",
-                str(idle_path),
-            ],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
+        if force_rebuild or not idle_path.is_file():
+            _extract_first_frame(sample_dir / "left.mp4", idle_path)
 
         # 生成示例上传照片（供演示快捷填充上传表单）
-        upload_path = sample_dir / "sample-upload.jpg"
         upload_src = spec["upload_source"]
-        if upload_src.is_file():
-            with Image.open(upload_src) as im:
-                im.convert("RGB").save(upload_path, format="JPEG", quality=92)
-        else:
-            shutil.copyfile(idle_path, upload_path)
+        if force_rebuild or not upload_path.is_file():
+            if upload_src.is_file():
+                with Image.open(upload_src) as im:
+                    im.convert("RGB").save(upload_path, format="JPEG", quality=92)
+            else:
+                shutil.copyfile(idle_path, upload_path)
 
         samples_info[species] = {
             "idle_image": {"path": f"samples/{species}/idle.jpg", **probe_image(idle_path)},
@@ -575,15 +647,25 @@ def build_samples() -> dict[str, dict]:
 
 
 def main() -> None:
-    transitions = build_transitions()
-    samples = build_samples()
-    manifest = {
+    parser = argparse.ArgumentParser(description="探测或重建网页 Demo 公共素材并更新 manifest.json")
+    parser.add_argument("--rebuild-transitions", action="store_true", help="重新生成合成过场视频并覆盖现有文件")
+    parser.add_argument("--rebuild-samples", action="store_true", help="强制重建猫狗样例视频与图片")
+    args = parser.parse_args()
+
+    manifest_path = ASSETS_DIR / "manifest.json"
+    existing_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+
+    transitions = build_transitions(force_synthetic=args.rebuild_transitions)
+    default_wallpaper = build_default_wallpaper()
+    samples = build_samples(force_rebuild=args.rebuild_samples, existing_manifest=existing_manifest)
+    manifest: dict = {
         "version": "1.0.0",
         "target_spec": {"width": WIDTH, "height": HEIGHT, "aspect_ratio": "16:9", "fps": FPS},
         "transitions": transitions,
-        "samples": samples,
     }
-    manifest_path = ASSETS_DIR / "manifest.json"
+    if default_wallpaper is not None:
+        manifest["default_wallpaper"] = default_wallpaper
+    manifest["samples"] = samples
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"已写入 {manifest_path}")
     print(json.dumps(manifest, ensure_ascii=False, indent=2))

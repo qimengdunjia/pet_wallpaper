@@ -60,7 +60,7 @@ const bgGeneratingCount = computed(
 
 function handleBackHome() {
   interruptPlayback();
-  if (petState.savedWallpaper || petState.pets.some((p) => p.active_assets)) {
+  if (petState.savedWallpaper || petState.pets.some((p) => p.active_assets) || Boolean(petState.defaultWallpaper)) {
     setRoute("home");
   } else {
     setRoute("welcome");

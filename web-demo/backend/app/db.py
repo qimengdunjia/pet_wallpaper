@@ -485,3 +485,8 @@ class DemoDatabase:
             "version_id": version_id,
             "updated_at": ts,
         }
+
+    def clear_current_wallpaper(self, session_id: str) -> None:
+        """清除当前会话保存的自定义壁纸记录，恢复回默认壁纸状态。"""
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM current_wallpapers WHERE session_id = ?", (session_id,))

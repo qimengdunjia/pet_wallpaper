@@ -5,6 +5,7 @@ import type { CurrentWallpaper, GenerationJob, PetProfile, Species } from "@/typ
 export const petState = reactive({
   pets: [] as PetProfile[],
   savedWallpaper: null as CurrentWallpaper | null,
+  defaultWallpaper: null as CurrentWallpaper | null,
   loading: false,
 });
 
@@ -25,9 +26,33 @@ export function setSavedWallpaper(wallpaper: CurrentWallpaper | null) {
   petState.savedWallpaper = wallpaper;
 }
 
+export function setDefaultWallpaper(wallpaper: CurrentWallpaper | null) {
+  petState.defaultWallpaper = wallpaper;
+}
+
+export function getDefaultPet(): PetProfile | undefined {
+  const dw = petState.defaultWallpaper;
+  if (!dw) return undefined;
+  return {
+    ...dw.pet,
+    is_default: true,
+    active_version_id: dw.version_id,
+    active_assets: dw.assets,
+  };
+}
+
+export function getAllPets(): PetProfile[] {
+  const defaultPet = getDefaultPet();
+  return defaultPet ? [defaultPet, ...petState.pets] : [...petState.pets];
+}
+
 export function findPetById(petId: string | null | undefined): PetProfile | undefined {
   if (!petId) return undefined;
-  return petState.pets.find((p) => p.id === petId);
+  const userPet = petState.pets.find((p) => p.id === petId);
+  if (userPet) return userPet;
+  const defaultPet = getDefaultPet();
+  if (defaultPet && defaultPet.id === petId) return defaultPet;
+  return undefined;
 }
 
 /** 将轮询返回的 job 合并到所属档案，返回更新后的宠物（若档案存在）。 */
@@ -53,7 +78,7 @@ export function applyJobToPet(job: GenerationJob): PetProfile | undefined {
 }
 
 export function getPetsBySpecies(species: Species): PetProfile[] {
-  return petState.pets.filter((pet) => pet.species === species);
+  return getAllPets().filter((pet) => pet.species === species);
 }
 
 export function getFirstReadyPet(): PetProfile | undefined {
@@ -63,5 +88,6 @@ export function getFirstReadyPet(): PetProfile | undefined {
 export function resetPetState() {
   petState.pets = [];
   petState.savedWallpaper = null;
+  petState.defaultWallpaper = null;
   petState.loading = false;
 }

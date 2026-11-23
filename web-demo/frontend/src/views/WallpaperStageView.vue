@@ -1,7 +1,7 @@
 <!-- 文件用途：在等比画布播放宠物壁纸，管理热区、模式按钮与宠物弹层。 -->
 <script setup lang="ts">
 import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { hotzoneLabel, resolveHotzone } from "@/lib/hotzone";
 import { findPetById } from "@/stores/petStore";
 import {
@@ -20,6 +20,7 @@ import PetSelectorPanel from "@/components/PetSelectorPanel.vue";
 
 const clockText = useClock();
 const canvasRef = ref<HTMLElement | null>(null);
+const idleVideoRef = ref<HTMLVideoElement | null>(null);
 const videoRefs = ref<Partial<Record<HotzoneSlot, HTMLVideoElement>>>({});
 let actionSafetyTimer: number | null = null;
 
@@ -33,6 +34,27 @@ const isDriving = computed(() => systemState.drivingMode === "driving");
 function setVideoRef(slot: HotzoneSlot, el: unknown) {
   if (el instanceof HTMLVideoElement) {
     videoRefs.value[slot] = el;
+  } else {
+    delete videoRefs.value[slot];
+  }
+}
+
+function playIdleVideo() {
+  const el = idleVideoRef.value;
+  if (!el || !assets.value?.idle_video) return;
+  if (playerState.playbackState !== "idle" || playerState.selectorOpen) return;
+  const playPromise = el.play();
+  if (playPromise && typeof playPromise.catch === "function") {
+    playPromise.catch(() => undefined);
+  }
+}
+
+function pauseIdleVideo(resetTime = false) {
+  const el = idleVideoRef.value;
+  if (!el) return;
+  el.pause();
+  if (resetTime) {
+    el.currentTime = 0;
   }
 }
 
@@ -59,19 +81,39 @@ watch(
   (state) => {
     if (state === "idle") {
       stopAllVideos();
+      void nextTick(() => playIdleVideo());
+    } else if (state === "switching") {
+      pauseIdleVideo(true);
     }
   },
 );
 
 watch(
-  () => playerState.currentVersionId,
+  [() => assets.value?.version_id, () => assets.value?.idle_video?.url],
   () => {
     stopAllVideos();
+    void nextTick(() => playIdleVideo());
   },
 );
 
+watch(
+  () => playerState.selectorOpen,
+  (open) => {
+    if (open) {
+      pauseIdleVideo(false);
+    } else if (playerState.playbackState === "idle") {
+      void nextTick(() => playIdleVideo());
+    }
+  },
+);
+
+onMounted(() => {
+  void nextTick(() => playIdleVideo());
+});
+
 onBeforeUnmount(() => {
   stopAllVideos();
+  pauseIdleVideo(true);
 });
 
 function handleCanvasClick(event: MouseEvent) {
@@ -92,14 +134,24 @@ function handleCanvasClick(event: MouseEvent) {
   clearActionTimer();
   videoEl.currentTime = 0;
   const playPromise = videoEl.play();
-  if (playPromise && typeof playPromise.catch === "function") {
-    playPromise.catch(() => {
-      completeActionPlayback();
-    });
+  if (playPromise && typeof playPromise.then === "function") {
+    playPromise
+      .then(() => {
+        if (playerState.activeAction === hit.slot) {
+          pauseIdleVideo(true);
+        }
+      })
+      .catch(() => {
+        completeActionPlayback();
+      });
+  } else {
+    pauseIdleVideo(true);
   }
+  const durationSec = assets.value?.actions[hit.slot]?.duration ?? 4.5;
+  const safetyMs = Math.max(6500, Math.ceil((durationSec + 2.5) * 1000));
   actionSafetyTimer = window.setTimeout(() => {
     completeActionPlayback();
-  }, 5500);
+  }, safetyMs);
 }
 
 function handleVideoEnded(slot: HotzoneSlot) {
@@ -111,6 +163,7 @@ function handleVideoEnded(slot: HotzoneSlot) {
       videoEl.currentTime = 0;
     }
     completeActionPlayback();
+    void nextTick(() => playIdleVideo());
   }
 }
 
@@ -160,6 +213,21 @@ function handleExitWallpaper() {
           :alt="currentPet?.name || '宠物壁纸'"
           class="stage-media stage-idle"
           data-testid="wallpaper-idle-image"
+        />
+
+        <video
+          v-if="assets.idle_video"
+          :key="`${assets.version_id}-idle-video`"
+          ref="idleVideoRef"
+          :src="assets.idle_video.url"
+          :poster="assets.idle_image.url"
+          class="stage-media stage-idle-video"
+          autoplay
+          loop
+          muted
+          playsinline
+          preload="auto"
+          data-testid="wallpaper-idle-video"
         />
 
         <video
@@ -308,8 +376,12 @@ function handleExitWallpaper() {
   z-index: 1;
 }
 
-.stage-video {
+.stage-idle-video {
   z-index: 2;
+}
+
+.stage-video {
+  z-index: 3;
   opacity: 0;
 }
 

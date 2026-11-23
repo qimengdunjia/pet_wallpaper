@@ -1,6 +1,5 @@
 <!-- 文件用途：播放生成过场，展示任务进度，并提供生成或素材加载失败后的操作。 -->
 <script setup lang="ts">
-import loadingDog from "@/assets/mastergo/loading-dog.png";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { createIdempotencyKey, submitGeneration } from "@/lib/api";
 import {
@@ -69,7 +68,7 @@ function enterChaseLoop() {
 
   firstLoopTimer = window.setTimeout(() => {
     void onFirstLoopFinished();
-  }, 7050);
+  }, 7300);
 }
 
 async function onFirstLoopFinished() {
@@ -108,7 +107,7 @@ function startIntroSequence() {
 
   introFallbackTimer = window.setTimeout(() => {
     enterChaseLoop();
-  }, 3300);
+  }, 3500);
 
   if (systemState.cutoutStrategy === "immediate") {
     void evaluateWaitingBatch();
@@ -246,17 +245,13 @@ function handleReturnHome() {
       <!-- 过场期间画布热区全部屏蔽 -->
       <div class="transition-shield" data-testid="transition-hotzone-shield" />
 
-      <div v-if="phase === 'loop' && !waitingError" class="waiting-art" aria-hidden="true">
-        <img :src="loadingDog" alt="" />
-      </div>
-
       <div v-if="!waitingError" class="phase-pill" data-testid="transition-phase-badge">
         <span class="pulse-dot" />
         <span v-if="phase === 'intro'">入场先导 · 3 秒</span>
         <span v-else>追逐等待循环 · 第 {{ loopRound }} 轮（7 秒循环）</span>
       </div>
 
-      <!-- 进度条位置、厚度和渐变取自 MasterGo 屏 08（3:2998、3:3001）。 -->
+      <!-- 底部悬浮进度卡片：避免遮挡画布中央的猫狗奔跑动画 -->
       <div v-if="!waitingError" class="jobs-hud" data-testid="transition-jobs-hud">
         <div v-for="job in waitingJobs" :key="job.id" class="job-progress-row">
           <div class="job-label-line">
@@ -337,15 +332,16 @@ function handleReturnHome() {
 .transition-video {
   position: absolute;
   inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.14s linear;
 }
 
 .transition-video.visible {
+  z-index: 2;
   opacity: 1;
 }
 
@@ -353,23 +349,6 @@ function handleReturnHome() {
   position: absolute;
   inset: 0;
   z-index: 4;
-}
-
-.waiting-art {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  background: rgb(0 0 0 / 60%);
-  pointer-events: none;
-}
-
-/* MasterGo 屏 08 的位图填充使用了垂直翻转。 */
-.waiting-art img {
-  position: absolute;
-  left: 50%;
-  top: 21.6%;
-  width: 11.5625%;
-  transform: translateX(-50%) scaleY(-1);
 }
 
 .phase-pill {
@@ -413,11 +392,17 @@ function handleReturnHome() {
 
 .jobs-hud {
   position: absolute;
-  top: calc(53% - 1.7em);
+  bottom: max(56px, 10%);
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
-  width: min(86%, max(212px, calc(19.531cqw + 52px)));
+  width: min(500px, 86%);
+  padding: 12px 20px;
+  border-radius: 22px;
+  background: rgba(18, 26, 44, 0.56);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   color: #ffffff;
   filter: drop-shadow(0 1px 2px rgb(5 12 21 / 80%));
   display: flex;

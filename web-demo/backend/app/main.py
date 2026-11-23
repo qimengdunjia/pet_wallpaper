@@ -18,11 +18,14 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from .config import Settings
 from .db import DemoDatabase, GenerationKeyConflict
-from .media import PhotoValidationError, normalize_photo
+from .media import PhotoValidationError, inspect_image, inspect_video, normalize_photo
 from .providers import BaseGenerationProvider, build_provider
 from .worker import GenerationWorker
 
 SESSION_COOKIE = "pet_demo_session"
+DEFAULT_WALLPAPER_PET_ID = "default-dog"
+DEFAULT_WALLPAPER_VERSION_ID = "default-dog-v1"
+DEFAULT_WALLPAPER_TIMESTAMP = "2026-11-23T00:00:00+00:00"
 Species = Literal["cat", "dog"]
 Gender = Literal["弟弟", "妹妹", "未设置"]
 PetName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
@@ -152,6 +155,68 @@ def _load_assets_manifest(assets_dir: Path) -> dict:
     return {"transitions": {}, "samples": {}}
 
 
+def _strip_asset_meta(meta: dict | None, fallback_loader) -> dict:
+    cleaned = dict(meta) if meta else fallback_loader()
+    cleaned.pop("path", None)
+    cleaned.pop("origin", None)
+    return cleaned
+
+
+def _build_default_wallpaper(assets_dir: Path, manifest: dict) -> dict | None:
+    """构造预置默认狗狗壁纸清单（含动态待机与三热区交互视频）；文件缺失时返回 None。"""
+    base_dir = assets_dir / "default-wallpaper"
+    idle_img = base_dir / "idle.jpg"
+    idle_vid = base_dir / "idle.mp4"
+    action_files = {slot: base_dir / f"{slot}.mp4" for slot in ("left", "center", "right")}
+    if not idle_img.is_file() or not idle_vid.is_file() or not all(p.is_file() for p in action_files.values()):
+        return None
+
+    dw = manifest.get("default_wallpaper") or {}
+    manifest_actions = dw.get("actions") or {}
+    assets = {
+        "version_id": DEFAULT_WALLPAPER_VERSION_ID,
+        "version_number": 1,
+        "created_at": DEFAULT_WALLPAPER_TIMESTAMP,
+        "idle_image": {
+            "url": "/api/assets/default-wallpaper/idle",
+            **_strip_asset_meta(dw.get("idle_image"), lambda: inspect_image(idle_img)),
+        },
+        "idle_video": {
+            "url": "/api/assets/default-wallpaper/idle-video",
+            **_strip_asset_meta(dw.get("idle_video"), lambda: inspect_video(idle_vid)),
+        },
+        "actions": {
+            slot: {
+                "url": f"/api/assets/default-wallpaper/{slot}",
+                **_strip_asset_meta(manifest_actions.get(slot), lambda p=path: inspect_video(p)),
+            }
+            for slot, path in action_files.items()
+        },
+    }
+    pet = {
+        "id": DEFAULT_WALLPAPER_PET_ID,
+        "species": dw.get("species", "dog"),
+        "name": dw.get("name", "默认狗狗"),
+        "gender": dw.get("gender", "未设置"),
+        "breed": dw.get("breed", "默认壁纸"),
+        "is_default": True,
+        "original_photo_url": "/api/assets/default-wallpaper/idle",
+        "active_version_id": DEFAULT_WALLPAPER_VERSION_ID,
+        "latest_job_id": None,
+        "active_assets": assets,
+        "latest_job": None,
+        "created_at": DEFAULT_WALLPAPER_TIMESTAMP,
+        "updated_at": DEFAULT_WALLPAPER_TIMESTAMP,
+    }
+    return {
+        "pet_id": DEFAULT_WALLPAPER_PET_ID,
+        "version_id": DEFAULT_WALLPAPER_VERSION_ID,
+        "updated_at": DEFAULT_WALLPAPER_TIMESTAMP,
+        "pet": pet,
+        "assets": assets,
+    }
+
+
 def create_app(
     settings: Settings | None = None,
     provider: BaseGenerationProvider | None = None,
@@ -207,7 +272,7 @@ def create_app(
 
     @app.get("/api/config")
     def get_config():
-        """返回后端运行模式、Mock 演示控制开关与过场视频清单。"""
+        """返回后端运行模式、Mock 演示控制开关、过场视频清单与默认壁纸。"""
         manifest = _load_assets_manifest(config.assets_dir)
         transitions = manifest.get("transitions", {})
         intro = transitions.get("intro", {})
@@ -225,6 +290,7 @@ def create_app(
                 "cat": "/api/assets/samples/cat/upload",
                 "dog": "/api/assets/samples/dog/upload",
             },
+            "default_wallpaper": _build_default_wallpaper(config.assets_dir, manifest),
         }
 
     @app.get("/api/assets/manifest")
@@ -241,6 +307,20 @@ def create_app(
         if not target or not target.is_file():
             raise HTTPException(404, "过场素材不存在")
         return FileResponse(target, media_type="video/mp4")
+
+    @app.get("/api/assets/default-wallpaper/{slot}")
+    def get_default_wallpaper_asset(slot: Literal["idle", "idle-video", "left", "center", "right"]):
+        allowed = {
+            "idle": (config.assets_dir / "default-wallpaper" / "idle.jpg", "image/jpeg"),
+            "idle-video": (config.assets_dir / "default-wallpaper" / "idle.mp4", "video/mp4"),
+            "left": (config.assets_dir / "default-wallpaper" / "left.mp4", "video/mp4"),
+            "center": (config.assets_dir / "default-wallpaper" / "center.mp4", "video/mp4"),
+            "right": (config.assets_dir / "default-wallpaper" / "right.mp4", "video/mp4"),
+        }
+        target, media_type = allowed[slot]
+        if not target.is_file():
+            raise HTTPException(404, "默认壁纸素材不存在")
+        return FileResponse(target, media_type=media_type)
 
     @app.get("/api/assets/samples/{species}/upload")
     def get_sample_upload(species: Species):
@@ -418,6 +498,14 @@ def create_app(
     @app.put("/api/current-wallpaper")
     def put_current_wallpaper(request: Request, body: CurrentWallpaperRequest):
         session_id = resolve_session_id(request)
+        if body.pet_id == DEFAULT_WALLPAPER_PET_ID:
+            if body.version_id != DEFAULT_WALLPAPER_VERSION_ID:
+                raise HTTPException(422, "所选默认壁纸版本不存在")
+            default_wp = _build_default_wallpaper(config.assets_dir, _load_assets_manifest(config.assets_dir))
+            if not default_wp:
+                raise HTTPException(404, "默认壁纸素材不存在")
+            db.clear_current_wallpaper(session_id)
+            return {"current": default_wp}
         pet = db.get_pet(session_id, body.pet_id)
         if not pet:
             raise HTTPException(404, "目标宠物不存在")

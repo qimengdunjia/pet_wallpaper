@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
-import { getFirstReadyPet, petState } from "@/stores/petStore";
+import { getDefaultPet, getFirstReadyPet, petState } from "@/stores/petStore";
 import { activatePetWallpaper } from "@/stores/playerStore";
 import { guardParkedAction, setRoute, showToast, systemState } from "@/stores/systemStore";
 
@@ -20,6 +20,10 @@ const featuredPet = computed(() => {
   const firstReady = getFirstReadyPet();
   if (firstReady) {
     return { pet: firstReady, isLastSaved: false };
+  }
+  const defaultPet = getDefaultPet();
+  if (defaultPet) {
+    return { pet: defaultPet, isLastSaved: false };
   }
   return null;
 });
@@ -91,7 +95,9 @@ function handleAddPet() {
       <div v-if="featuredPet" class="home-right-card" data-testid="saved-wallpaper-card">
         <div class="saved-header">
           <strong>已保存的宠物壁纸</strong>
-          <span class="pill-tag info">上次使用：{{ featuredPet.pet.name }}</span>
+          <span class="pill-tag info">
+            {{ featuredPet.pet.is_default ? `默认壁纸：${featuredPet.pet.name}` : `上次使用：${featuredPet.pet.name}` }}
+          </span>
         </div>
         <div class="saved-frame">
           <img

@@ -508,3 +508,73 @@ async def _run_kling_provider_test(tmp_path: Path):
     finally:
         providers_mod.httpx.AsyncClient = old_client_cls  # type: ignore[misc]
         await api_client.aclose()
+
+
+def test_default_wallpaper_config_assets_and_switch_back(tmp_path: Path):
+    settings = _make_settings(tmp_path)
+    headers = {"X-Demo-Session": "sess-default-wp"}
+    with TestClient(create_app(settings)) as client:
+        cfg = client.get("/api/config", headers=headers).json()
+        dw = cfg["default_wallpaper"]
+        assert dw is not None
+        assert dw["pet_id"] == "default-dog"
+        assert dw["version_id"] == "default-dog-v1"
+        assert dw["pet"]["is_default"] is True
+        assert dw["pet"]["species"] == "dog"
+        assert dw["assets"]["idle_image"]["width"] == 1920
+        assert dw["assets"]["idle_image"]["height"] == 1080
+        assert dw["assets"]["idle_video"]["width"] == 1920
+        assert dw["assets"]["idle_video"]["height"] == 1080
+        assert dw["assets"]["idle_video"]["fps"] == 24.0
+        for slot in ("left", "center", "right"):
+            action = dw["assets"]["actions"][slot]
+            assert action["width"] == 1920
+            assert action["height"] == 1080
+            assert action["fps"] == 24.0
+
+        # 验证默认壁纸静态首帧及视频槽位可正常读取与 Range 分段请求
+        idle_img_resp = client.get(dw["assets"]["idle_image"]["url"])
+        assert idle_img_resp.status_code == 200
+        assert idle_img_resp.content[:2] == b"\xff\xd8"
+
+        for video_url in (
+            dw["assets"]["idle_video"]["url"],
+            dw["assets"]["actions"]["left"]["url"],
+            dw["assets"]["actions"]["center"]["url"],
+            dw["assets"]["actions"]["right"]["url"],
+        ):
+            range_resp = client.get(video_url, headers={"Range": "bytes=0-511"})
+            assert range_resp.status_code == 206
+            assert len(range_resp.content) == 512
+
+        # 生成并保存一个自定义宠物壁纸后，验证可切回默认狗狗壁纸
+        cat_id = client.post("/api/pets", json={"species": "cat", "name": "咪咪"}, headers=headers).json()["pet"]["id"]
+        job_id = client.post(
+            "/api/generations",
+            data={"pet_id": cat_id, "idempotency_key": "default-back-1"},
+            files={"photo": ("cat.jpg", _make_jpeg_bytes(), "image/jpeg")},
+            headers=headers,
+        ).json()["job"]["id"]
+        done = _wait_job(client, job_id, headers)
+        assert done["status"] == "ready"
+        assert client.put(
+            "/api/current-wallpaper",
+            json={"pet_id": cat_id, "version_id": done["version_id"]},
+            headers=headers,
+        ).status_code == 200
+
+        bad_switch = client.put(
+            "/api/current-wallpaper",
+            json={"pet_id": "default-dog", "version_id": "invalid-ver"},
+            headers=headers,
+        )
+        assert bad_switch.status_code == 422
+
+        switch_back = client.put(
+            "/api/current-wallpaper",
+            json={"pet_id": "default-dog", "version_id": "default-dog-v1"},
+            headers=headers,
+        )
+        assert switch_back.status_code == 200
+        assert switch_back.json()["current"]["pet_id"] == "default-dog"
+        assert client.get("/api/current-wallpaper", headers=headers).json()["current"] is None

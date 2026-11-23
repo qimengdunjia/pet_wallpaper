@@ -16,7 +16,7 @@
       "fps": 24.0,
       "duration": 3.0,
       "aspect_ratio": "16:9",
-      "size_bytes": 174951
+      "size_bytes": 2946075
     },
     "loop": {
       "path": "transitions/chase-loop-7s.mp4",
@@ -27,7 +27,67 @@
       "fps": 24.0,
       "duration": 7.0,
       "aspect_ratio": "16:9",
-      "size_bytes": 398648
+      "size_bytes": 7368389
+    }
+  },
+  "default_wallpaper": {
+    "species": "dog",
+    "name": "默认狗狗",
+    "gender": "未设置",
+    "breed": "默认壁纸",
+    "idle_image": {
+      "path": "default-wallpaper/idle.jpg",
+      "format": "jpeg",
+      "mime": "image/jpeg",
+      "width": 1920,
+      "height": 1080,
+      "size_bytes": 228451
+    },
+    "idle_video": {
+      "path": "default-wallpaper/idle.mp4",
+      "format": "mp4",
+      "mime": "video/mp4",
+      "width": 1920,
+      "height": 1080,
+      "fps": 24.0,
+      "duration": 4.458,
+      "aspect_ratio": "16:9",
+      "size_bytes": 4725747
+    },
+    "actions": {
+      "left": {
+        "path": "default-wallpaper/left.mp4",
+        "format": "mp4",
+        "mime": "video/mp4",
+        "width": 1920,
+        "height": 1080,
+        "fps": 24.0,
+        "duration": 4.458,
+        "aspect_ratio": "16:9",
+        "size_bytes": 4445315
+      },
+      "center": {
+        "path": "default-wallpaper/center.mp4",
+        "format": "mp4",
+        "mime": "video/mp4",
+        "width": 1920,
+        "height": 1080,
+        "fps": 24.0,
+        "duration": 4.458,
+        "aspect_ratio": "16:9",
+        "size_bytes": 4571260
+      },
+      "right": {
+        "path": "default-wallpaper/right.mp4",
+        "format": "mp4",
+        "mime": "video/mp4",
+        "width": 1920,
+        "height": 1080,
+        "fps": 24.0,
+        "duration": 4.458,
+        "aspect_ratio": "16:9",
+        "size_bytes": 4433867
+      }
     }
   },
   "samples": {

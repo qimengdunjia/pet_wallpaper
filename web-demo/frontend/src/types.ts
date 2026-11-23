@@ -37,6 +37,7 @@ export interface AssetVersionManifest {
   version_number: number;
   created_at: string;
   idle_image: ImageAssetMeta;
+  idle_video?: VideoAssetMeta | null;
   actions: Record<HotzoneSlot, VideoAssetMeta>;
 }
 
@@ -61,6 +62,7 @@ export interface PetProfile {
   name: string;
   gender: Gender;
   breed: string;
+  is_default?: boolean;
   original_photo_url: string | null;
   active_version_id: string | null;
   latest_job_id: string | null;
@@ -91,4 +93,5 @@ export interface AppConfig {
     cat: string;
     dog: string;
   };
+  default_wallpaper?: CurrentWallpaper | null;
 }

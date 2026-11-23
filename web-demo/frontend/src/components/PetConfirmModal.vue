@@ -86,6 +86,7 @@ async function handleConfirmUse() {
 
         <div class="confirm-actions-stack">
           <button
+            v-if="!targetPet.is_default"
             class="btn btn-soft stack-btn"
             data-testid="confirm-edit-info-btn"
             @click="handleOpenEdit"

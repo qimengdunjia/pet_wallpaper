@@ -9,7 +9,15 @@ import {
   startWaitingBatch,
   trackJob,
 } from "@/stores/generationStore";
-import { petState, resetPetState, setPets, setSavedWallpaper } from "@/stores/petStore";
+import {
+  findPetById,
+  getPetsBySpecies,
+  petState,
+  resetPetState,
+  setDefaultWallpaper,
+  setPets,
+  setSavedWallpaper,
+} from "@/stores/petStore";
 import {
   activatePetWallpaper,
   interruptPlayback,
@@ -357,5 +365,74 @@ describe("frontend stores state machine & decoupling", () => {
     setDrivingMode("driving");
     expect(triggerHotzone("center", 0.5)).toBe(false);
     expect(guardParkedAction("新增宠物")).toBe(false);
+  });
+
+  it("exposes default dog wallpaper in store queries, falls back on failure, and cleans up on reset", async () => {
+    const defaultAssets = {
+      ...makeAssets("dog", "default-dog-v1"),
+      idle_video: {
+        url: "/api/assets/default-wallpaper/idle-video",
+        format: "mp4",
+        mime: "video/mp4",
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        duration: 4.458,
+        aspect_ratio: "16:9",
+        size_bytes: 4725747,
+      },
+    };
+    const defaultDog: PetProfile = {
+      ...makePet("default-dog", "dog", true),
+      name: "默认狗狗",
+      breed: "默认壁纸",
+      is_default: true,
+      active_version_id: "default-dog-v1",
+      active_assets: defaultAssets,
+    };
+
+    setDefaultWallpaper({
+      pet_id: defaultDog.id,
+      version_id: "default-dog-v1",
+      updated_at: "2026-11-23T00:00:00Z",
+      pet: defaultDog,
+      assets: defaultAssets,
+    });
+
+    expect(findPetById("default-dog")?.is_default).toBe(true);
+    expect(getPetsBySpecies("dog").map((p) => p.id)).toContain("default-dog");
+    expect(getPetsBySpecies("cat")).toHaveLength(0);
+
+    // 无自定义历史壁纸时生成失败可回退至默认狗狗壁纸
+    const firstCat = makePet("cat-new", "cat", false);
+    setPets([firstCat]);
+    setRoute("generating", { syncHash: false });
+    startWaitingBatch(["job-fail-default"]);
+    await handleJobSnapshot(
+      {
+        id: "job-fail-default",
+        pet_id: firstCat.id,
+        idempotency_key: "k-fail-default",
+        provider: "mock",
+        status: "failed",
+        stage: "center",
+        progress: 50,
+        version_id: null,
+        error_message: "生成失败",
+        assets: null,
+        created_at: "2026-11-23T00:00:00Z",
+        updated_at: "2026-11-23T00:00:01Z",
+      },
+      { verifyAssets: async () => undefined },
+    );
+
+    expect(systemState.route).toBe("wallpaper");
+    expect(playerState.currentPetId).toBe("default-dog");
+    expect(playerState.currentAssets?.idle_video?.url).toBe("/api/assets/default-wallpaper/idle-video");
+
+    resetPetState();
+    expect(petState.defaultWallpaper).toBeNull();
+    expect(findPetById("default-dog")).toBeUndefined();
+    expect(getPetsBySpecies("dog")).toHaveLength(0);
   });
 });

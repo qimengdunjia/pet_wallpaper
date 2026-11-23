@@ -14,6 +14,7 @@ import {
 } from "@/stores/generationStore";
 import {
   getFirstReadyPet,
+  setDefaultWallpaper,
   setPets,
   setSavedWallpaper,
 } from "@/stores/petStore";
@@ -39,6 +40,7 @@ async function bootstrap() {
       fetchGenerations(),
     ]);
     systemState.config = config;
+    setDefaultWallpaper(config.default_wallpaper ?? null);
     setPets(pets);
     setSavedWallpaper(currentWallpaper);
 
@@ -73,6 +75,16 @@ async function bootstrap() {
     } else if (activeJobs.length > 0) {
       startWaitingBatch(activeJobs.map((j) => j.id));
       setRoute("generating");
+    } else if (config.default_wallpaper) {
+      const defWp = config.default_wallpaper;
+      setDisplayedWallpaper(defWp.pet_id, defWp.version_id, defWp.assets);
+      if (hashRoute === "welcome") {
+        setRoute("welcome");
+      } else if (hashRoute === "home") {
+        setRoute("home");
+      } else {
+        setRoute("wallpaper");
+      }
     } else {
       const readyPet = getFirstReadyPet();
       if (readyPet && readyPet.active_assets && readyPet.active_version_id) {

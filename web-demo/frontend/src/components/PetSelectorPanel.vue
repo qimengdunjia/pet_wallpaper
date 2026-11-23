@@ -30,8 +30,8 @@ watch(
 );
 
 const filteredPets = computed(() => getPetsBySpecies(activeTab.value));
-const catCount = computed(() => petState.pets.filter((p) => p.species === "cat").length);
-const dogCount = computed(() => petState.pets.filter((p) => p.species === "dog").length);
+const catCount = computed(() => getPetsBySpecies("cat").length);
+const dogCount = computed(() => getPetsBySpecies("dog").length);
 
 watch(filteredPets, (list) => {
   if (focusedIndex.value >= list.length) {
@@ -44,6 +44,9 @@ const focusedPet = computed(() => filteredPets.value[focusedIndex.value] || null
 function statusInfo(pet: PetProfile): { text: string; tone: string; selectable: boolean } {
   if (pet.id === playerState.currentPetId) {
     return { text: "当前使用", tone: "success", selectable: true };
+  }
+  if (pet.is_default) {
+    return { text: "默认壁纸", tone: "info", selectable: true };
   }
   const job = pet.latest_job;
   if (job && (job.status === "queued" || job.status === "generating")) {

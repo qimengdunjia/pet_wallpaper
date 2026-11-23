@@ -3,7 +3,7 @@ import { reactive } from "vue";
 import { saveCurrentWallpaper } from "@/lib/api";
 import { verifyAndPreloadAssets } from "@/lib/preload";
 import type { AssetVersionManifest, HotzoneSlot, PetProfile } from "@/types";
-import { petState, setSavedWallpaper } from "./petStore";
+import { getDefaultPet, petState, setSavedWallpaper } from "./petStore";
 import { showToast, systemState } from "./systemStore";
 
 export interface SwitchDeps {
@@ -174,8 +174,9 @@ export async function restoreFallbackWallpaper(options: {
     active_version_id: playerState.currentVersionId,
     active_assets: playerState.currentAssets,
   };
+  const defaultPet = getDefaultPet();
   const attempted = new Set(options.excludedVersions);
-  for (const pet of [savedPet, displayedPet, ...petState.pets]) {
+  for (const pet of [savedPet, displayedPet, ...petState.pets, defaultPet]) {
     if (!pet?.active_version_id || attempted.has(pet.active_version_id)) continue;
     attempted.add(pet.active_version_id);
     const result = await activatePetWallpaper(pet, { ...options, persist: false, force: true });

@@ -74,9 +74,13 @@ export async function verifyAndPreloadAssets(
     throw new Error("模拟切换壁纸资源加载失败");
   }
   await preloadImage(assets.idle_image.url);
-  await Promise.all([
+  const videoPreloads = [
     preloadVideoMetadata(assets.actions.left.url),
     preloadVideoMetadata(assets.actions.center.url),
     preloadVideoMetadata(assets.actions.right.url),
-  ]);
+  ];
+  if (assets.idle_video?.url) {
+    videoPreloads.push(preloadVideoMetadata(assets.idle_video.url));
+  }
+  await Promise.all(videoPreloads);
 }

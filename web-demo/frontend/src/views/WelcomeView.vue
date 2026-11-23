@@ -1,17 +1,29 @@
 <!-- 文件用途：使用 MasterGo 原始图层展示欢迎页，并进入宠物档案录入。 -->
 <script setup lang="ts">
+import { computed } from "vue";
 import welcomeDecoration from "@/assets/mastergo/welcome-decoration.svg";
 import welcomeCat from "@/assets/mastergo/cat.png";
 import welcomeDog from "@/assets/mastergo/dog-standing.png";
 import welcomeClouds from "@/assets/mastergo/clouds.png";
 import welcomeArrow from "@/assets/mastergo/welcome-next-arrow.svg";
+import { petState } from "@/stores/petStore";
+import { setDisplayedWallpaper } from "@/stores/playerStore";
 import { guardParkedAction, setRoute, systemState } from "@/stores/systemStore";
+
+const defaultWallpaper = computed(() => petState.defaultWallpaper);
 
 function handleStart() {
   if (!guardParkedAction("创建宠物档案")) return;
   systemState.onboardingReturnRoute = "welcome";
   systemState.onboardingSpeciesMode = null;
   setRoute("onboarding-species");
+}
+
+function handleEnterDefault() {
+  const dw = defaultWallpaper.value;
+  if (!dw) return;
+  setDisplayedWallpaper(dw.pet_id, dw.version_id, dw.assets);
+  setRoute("wallpaper");
 }
 </script>
 
@@ -29,14 +41,24 @@ function handleStart() {
       <div class="welcome-content">
         <h1>让宠物陪伴每次出行</h1>
         <p>Let your pet accompany you on every trip</p>
-        <button
-          class="btn btn-black welcome-cta"
-          data-testid="welcome-create-btn"
-          @click="handleStart"
-        >
-          创建我的宠物档案
-          <img :src="welcomeArrow" alt="" />
-        </button>
+        <div class="welcome-actions">
+          <button
+            class="btn btn-black welcome-cta"
+            data-testid="welcome-create-btn"
+            @click="handleStart"
+          >
+            创建我的宠物档案
+            <img :src="welcomeArrow" alt="" />
+          </button>
+          <button
+            v-if="defaultWallpaper"
+            class="btn btn-soft welcome-default-btn"
+            data-testid="welcome-default-btn"
+            @click="handleEnterDefault"
+          >
+            体验默认壁纸
+          </button>
+        </div>
       </div>
     </div>
   </section>
@@ -130,12 +152,27 @@ function handleStart() {
   line-height: 1.2;
 }
 
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4cqw;
+  margin-top: 2.7cqw;
+}
+
 .welcome-cta {
   min-height: 38px;
   height: 10.28cqh;
-  margin-top: 2.7cqw;
   padding: 0 2.5cqw;
   font-size: clamp(12px, 1.75cqw, 45px);
+  white-space: nowrap;
+}
+
+.welcome-default-btn {
+  min-height: 38px;
+  height: 10.28cqh;
+  padding: 0 2.2cqw;
+  font-size: clamp(12px, 1.6cqw, 40px);
   white-space: nowrap;
 }
 

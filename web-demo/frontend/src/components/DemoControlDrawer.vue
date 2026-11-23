@@ -97,6 +97,14 @@ const cutoutOptions: Array<{ value: CutoutStrategy; label: string }> = [
             · {{ playerState.currentAssets.idle_image.format.toUpperCase() }}
           </strong>
         </div>
+        <div v-if="playerState.currentAssets.idle_video" class="spec-item">
+          <span>待机动效</span>
+          <strong>
+            {{ playerState.currentAssets.idle_video.width }}×{{ playerState.currentAssets.idle_video.height }}
+            · {{ playerState.currentAssets.idle_video.fps }} fps ·
+            {{ playerState.currentAssets.idle_video.duration }}s
+          </strong>
+        </div>
         <div
           v-for="slot in (['left', 'center', 'right'] as const)"
           :key="slot"
