@@ -17,4 +17,4 @@
 
 四张图保存在 `output/pet_loading/keyframes/`，视频保存在 `output/pet_loading/video/`。工作流把模型对齐后的 73/175 帧均匀取样成 72/168 帧，用指定图片替换首尾画面，统一调整为成片尺寸后以 24 fps 导出无声 MP4。3 秒分支短于 H3 原生文档列出的训练区间；是否跑得自然、是否出现角色变形，以及替换首尾画面后是否闪跳，仍需逐段目视验收。
 
-修改提示词或分支默认值后，可用 `python3 scripts/build_pet_loading_workflow.py` 重建 JSON。若调整成片秒数，也同步更新动作提示词中的尾帧时间锚点。
+修改提示词或分支默认值后，从仓库根目录执行 `python3 algorithm-lab/scripts/build_pet_loading_workflow.py` 重建 JSON。若调整成片秒数，也同步更新动作提示词中的尾帧时间锚点。

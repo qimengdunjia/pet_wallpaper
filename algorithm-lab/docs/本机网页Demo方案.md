@@ -176,7 +176,7 @@ FastAPI 提供文件上传与静态文件服务，适合这个小规模本机 De
 ### 4.4 文件与配置
 
 ```text
-pet_wallpaper/
+algorithm-lab/
   app/                     # 本地后端和可灵适配代码
   web/                     # 页面、样式、浏览器脚本
   data/jobs/<任务ID>/

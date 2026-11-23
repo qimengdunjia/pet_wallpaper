@@ -20,11 +20,16 @@ __pycache__/
 .agents/
 .DS_Store
 
-# 本地运行数据、输入输出素材与测试产物
-data/
-inputs/
-outputs/
-output/
+# 网页 Demo 的前端依赖、构建产物与后端数据
+/web-demo/frontend/node_modules/
+/web-demo/frontend/dist/
+/web-demo/backend/data/
+
+# 算法验证的本地运行数据、输入输出素材与测试产物
+/algorithm-lab/data/
+/algorithm-lab/inputs/
+/algorithm-lab/outputs/
+/algorithm-lab/output/
 .runtime/
 .playwright-mcp/
 
@@ -33,5 +38,5 @@ draft_*_folder/
 /dog_test_*.xml
 /video_pika_h3_flex_fl2va.json
 *.pptx
-docs/*.html
+/algorithm-lab/docs/*.html
 docs/prd-screenshots/

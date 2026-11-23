@@ -1,6 +1,13 @@
-<!-- 文件用途：记录本项目的服务部署、本机访问方式和 Demo 测试经验。 -->
+<!-- 文件用途：记录项目目录、服务部署、本机访问方式和算法验证经验。 -->
 
-# ComfyUI 视频生成服务
+# 项目开发约定
+
+## 项目目录
+
+- `web-demo/` 承载横屏网页 Demo 的前端、后端与验收素材。开发入口见[网页 Demo 开发文档](docs/网页Demo开发文档.md)。
+- 算法验证页、工作流与本机算法数据位于 `algorithm-lab/`。从仓库根运行 `bash scripts/run.sh` 启动算法验证页，运行 `bash scripts/test.sh` 执行离线回归。
+
+## ComfyUI 视频生成服务
 
 - SSH 服务器别名：`z890ud`。
 - 服务器部署目录：`~/workspace/tz/pet_wallpaper`。
