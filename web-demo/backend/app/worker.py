@@ -80,6 +80,14 @@ class GenerationWorker:
         self._tasks[job_id] = task
         task.add_done_callback(lambda _t, jid=job_id: self._tasks.pop(jid, None))
 
+    async def cancel_jobs(self, job_ids: list[str]) -> None:
+        """取消并等待属于已删除宠物的后台生成任务退出。"""
+        tasks = [task for jid in job_ids if (task := self._tasks.get(jid)) is not None and not task.done()]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def _run_job(self, job_id: str) -> None:
         async with self._semaphore:
             job = self.db.get_job_any(job_id)

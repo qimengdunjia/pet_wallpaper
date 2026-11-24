@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -395,6 +396,29 @@ def create_app(
         if not pet:
             raise HTTPException(404, "宠物档案不存在")
         return {"pet": serialize_pet(pet, db, session_id)}
+
+    @app.delete("/api/pets/{pet_id}")
+    async def delete_pet(request: Request, pet_id: str):
+        """删除宠物档案，取消进行中的生成任务并清理磁盘上的上传照片与版本素材。"""
+        if pet_id == DEFAULT_WALLPAPER_PET_ID:
+            raise HTTPException(400, "默认壁纸不可删除")
+        session_id = resolve_session_id(request)
+        deleted = db.delete_pet(session_id, pet_id)
+        if not deleted:
+            raise HTTPException(404, "宠物档案不存在")
+
+        await worker.cancel_jobs(deleted["job_ids"])
+
+        shutil.rmtree(config.data_dir / "uploads" / pet_id, ignore_errors=True)
+        for job_id in deleted["job_ids"]:
+            shutil.rmtree(config.data_dir / "versions" / job_id, ignore_errors=True)
+        for rel_path in deleted["photo_paths"]:
+            try:
+                worker.resolve_data_path(rel_path).unlink(missing_ok=True)
+            except FileNotFoundError:
+                pass
+
+        return {"deleted_pet_id": pet_id, "was_current": deleted["was_current"]}
 
     @app.post("/api/generations")
     async def submit_generation(

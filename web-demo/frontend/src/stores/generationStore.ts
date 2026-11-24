@@ -1,14 +1,16 @@
 // 文件用途：轮询生成任务，管理等待批次以及就绪壁纸的切入和回退。
 import { nextTick, reactive } from "vue";
-import { fetchGeneration } from "@/lib/api";
-import type { GenerationJob } from "@/types";
+import { deletePet, fetchGeneration } from "@/lib/api";
+import type { GenerationJob, PetProfile } from "@/types";
 import {
   applyJobToPet,
   findPetById,
   petState,
+  removePet,
 } from "./petStore";
 import {
   activatePetWallpaper,
+  closePetSelector,
   playerState,
   restoreFallbackWallpaper,
   saveDisplayedWallpaper,
@@ -233,4 +235,68 @@ export function resetGenerationState() {
   stopAllPolling();
   clearWaitingBatch();
   generationState.jobsById = {};
+}
+
+export function cleanupPetJobs(petId: string) {
+  const removedIds = new Set<string>();
+  for (const [jobId, job] of Object.entries(generationState.jobsById)) {
+    if (job.pet_id === petId) {
+      stopPollingJob(jobId);
+      delete generationState.jobsById[jobId];
+      removedIds.add(jobId);
+    }
+  }
+  if (removedIds.size > 0) {
+    generationState.waitingJobIds = generationState.waitingJobIds.filter((id) => !removedIds.has(id));
+  }
+}
+
+/** 删除宠物档案及其本地任务缓存；若删除的是当前壁纸，自动回退到其他可用壁纸。 */
+export async function deletePetProfile(
+  pet: PetProfile,
+  options?: { deps?: SwitchDeps; deleteApi?: typeof deletePet },
+): Promise<boolean> {
+  const deleteFn = options?.deleteApi ?? deletePet;
+  try {
+    await deleteFn(pet.id);
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : "删除失败", "error");
+    return false;
+  }
+
+  cleanupPetJobs(pet.id);
+  removePet(pet.id);
+
+  if (playerState.confirmingPetId === pet.id) {
+    playerState.confirmingPetId = null;
+  }
+  if (playerState.editingPetId === pet.id) {
+    playerState.editingPetId = null;
+  }
+
+  if (playerState.currentPetId === pet.id) {
+    const fallback = await restoreFallbackWallpaper({
+      deps: options?.deps,
+      isCurrent: () => true,
+      excludedVersions: new Set(),
+    });
+    if (fallback.ok) {
+      await saveDisplayedWallpaper(options?.deps);
+      const nextPet = findPetById(playerState.currentPetId);
+      showToast(`已删除 ${pet.name}，已切换至 ${nextPet?.name || "可用壁纸"}`, "success", 2800);
+    } else {
+      playerState.currentPetId = null;
+      playerState.currentVersionId = null;
+      playerState.currentAssets = null;
+      playerState.playbackState = "idle";
+      playerState.activeAction = null;
+      closePetSelector();
+      setRoute(petState.pets.length > 0 ? "home" : "welcome");
+      showToast(`已删除 ${pet.name}，当前暂无可用壁纸`, "info", 2800);
+    }
+  } else {
+    showToast(`已删除 ${pet.name}`, "success", 2200);
+  }
+
+  return true;
 }

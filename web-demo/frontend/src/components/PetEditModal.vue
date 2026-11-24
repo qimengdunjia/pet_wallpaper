@@ -5,7 +5,9 @@ import profileCardArt from "@/assets/mastergo/edit-card-frame.svg";
 import profileCardForeground from "@/assets/mastergo/edit-card-foreground.svg";
 import profileCardWordmark from "@/assets/mastergo/edit-card-wordmark.svg";
 import { computed, ref, watch } from "vue";
+import PetDeleteConfirmModal from "@/components/PetDeleteConfirmModal.vue";
 import { updatePet } from "@/lib/api";
+import { deletePetProfile } from "@/stores/generationStore";
 import { findPetById, upsertPet } from "@/stores/petStore";
 import { playerState } from "@/stores/playerStore";
 import { guardParkedAction, showToast } from "@/stores/systemStore";
@@ -16,10 +18,13 @@ const name = ref("");
 const gender = ref<Gender>("未设置");
 const breed = ref("");
 const saving = ref(false);
+const confirmingDelete = ref(false);
+const deleting = ref(false);
 
 watch(
   targetPet,
   (pet) => {
+    confirmingDelete.value = false;
     if (pet) {
       name.value = pet.name;
       gender.value = pet.gender;
@@ -59,6 +64,25 @@ async function handleSave() {
     showToast(err instanceof Error ? err.message : "保存失败", "error");
   } finally {
     saving.value = false;
+  }
+}
+
+function requestDelete() {
+  if (!targetPet.value || targetPet.value.is_default || deleting.value) return;
+  if (!guardParkedAction("删除宠物")) return;
+  confirmingDelete.value = true;
+}
+
+async function confirmDelete() {
+  if (!targetPet.value || deleting.value) return;
+  deleting.value = true;
+  try {
+    const ok = await deletePetProfile(targetPet.value);
+    if (ok) {
+      confirmingDelete.value = false;
+    }
+  } finally {
+    deleting.value = false;
   }
 }
 </script>
@@ -142,15 +166,34 @@ async function handleSave() {
         </div>
       </div>
 
-      <button
-        class="btn btn-black save-cta-btn"
-        :disabled="saving"
-        data-testid="edit-pet-save-btn"
-        @click="handleSave"
-      >
-        {{ saving ? "保存中..." : "保存" }}
-      </button>
+      <div class="edit-cta-row">
+        <button
+          v-if="!targetPet.is_default"
+          type="button"
+          class="btn btn-danger edit-action-btn"
+          :disabled="saving || deleting"
+          data-testid="edit-pet-delete-btn"
+          @click="requestDelete"
+        >
+          删除宠物
+        </button>
+        <button
+          class="btn btn-black edit-action-btn"
+          :disabled="saving || deleting"
+          data-testid="edit-pet-save-btn"
+          @click="handleSave"
+        >
+          {{ saving ? "保存中..." : "保存" }}
+        </button>
+      </div>
     </div>
+
+    <PetDeleteConfirmModal
+      :pet="confirmingDelete ? targetPet : null"
+      :deleting="deleting"
+      @cancel="confirmingDelete = false"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
 
@@ -288,19 +331,21 @@ async function handleSave() {
   background: #ddfd66;
 }
 
-.save-cta-btn {
+.edit-cta-row {
   position: absolute;
   left: 50%;
   top: calc(100% + 3.89vh);
   transform: translateX(-50%);
-  min-width: max(105px, 16.406vw);
-  height: max(36px, 8.333vh);
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   z-index: 5;
 }
 
-.save-cta-btn:active:not(:disabled) {
-  transform: translateX(-50%) scale(0.97);
+.edit-action-btn {
+  min-width: max(105px, 14vw);
+  height: max(36px, 8.333vh);
+  font-size: 16px;
 }
 
 @media (max-height: 440px) {

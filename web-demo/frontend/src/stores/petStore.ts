@@ -22,6 +22,13 @@ export function upsertPet(pet: PetProfile) {
   }
 }
 
+export function removePet(petId: string) {
+  petState.pets = petState.pets.filter((item) => item.id !== petId);
+  if (petState.savedWallpaper?.pet_id === petId) {
+    petState.savedWallpaper = null;
+  }
+}
+
 export function setSavedWallpaper(wallpaper: CurrentWallpaper | null) {
   petState.savedWallpaper = wallpaper;
 }

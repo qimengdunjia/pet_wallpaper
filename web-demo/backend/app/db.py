@@ -247,6 +247,37 @@ class DemoDatabase:
             row = self._conn.execute("SELECT * FROM pets WHERE id = ?", (pet_id,)).fetchone()
         return _row_to_pet(row) if row else None
 
+    def delete_pet(self, session_id: str, pet_id: str) -> dict | None:
+        """删除宠物档案并级联清理其任务、版本和当前壁纸记录，返回待清理的任务与文件路径。"""
+        with self._lock, self._conn:
+            pet_row = self._conn.execute(
+                "SELECT id, original_photo_path FROM pets WHERE id = ? AND session_id = ?",
+                (pet_id, session_id),
+            ).fetchone()
+            if not pet_row:
+                return None
+            job_rows = self._conn.execute(
+                "SELECT id, photo_path FROM generation_jobs WHERE pet_id = ?",
+                (pet_id,),
+            ).fetchall()
+            current_row = self._conn.execute(
+                "SELECT pet_id FROM current_wallpapers WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            self._conn.execute(
+                "DELETE FROM pets WHERE id = ? AND session_id = ?",
+                (pet_id, session_id),
+            )
+        photo_paths = list({
+            path for path in (pet_row["original_photo_path"], *(row["photo_path"] for row in job_rows)) if path
+        })
+        return {
+            "pet_id": pet_id,
+            "job_ids": [row["id"] for row in job_rows],
+            "photo_paths": photo_paths,
+            "was_current": bool(current_row and current_row["pet_id"] == pet_id),
+        }
+
     def set_pet_original_photo(self, pet_id: str, photo_path: str) -> None:
         with self._lock, self._conn:
             self._conn.execute(
@@ -409,10 +440,12 @@ class DemoDatabase:
         idle_meta: dict,
         actions_meta: dict[str, dict],
         remote_tasks: dict | None = None,
-    ) -> dict:
+    ) -> dict | None:
         version_id = uuid.uuid4().hex
         ts = now_iso()
         with self._lock, self._conn:
+            if not self._conn.execute("SELECT 1 FROM pets WHERE id = ?", (pet_id,)).fetchone():
+                return None
             max_row = self._conn.execute(
                 "SELECT COALESCE(MAX(version_number), 0) AS max_ver FROM asset_versions WHERE pet_id = ?",
                 (pet_id,),

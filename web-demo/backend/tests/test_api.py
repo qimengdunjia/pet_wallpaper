@@ -607,3 +607,65 @@ def test_default_wallpaper_config_assets_and_switch_back(tmp_path: Path):
         assert switch_back.status_code == 200
         assert switch_back.json()["current"]["pet_id"] == "default-dog"
         assert client.get("/api/current-wallpaper", headers=headers).json()["current"] is None
+
+
+def test_delete_pet_cascades_files_current_wallpaper_and_cancels_jobs(tmp_path: Path):
+    settings = _make_settings(tmp_path)
+    headers = {"X-Demo-Session": "sess-delete"}
+    with TestClient(create_app(settings)) as client:
+        assert client.delete("/api/pets/default-dog", headers=headers).status_code == 400
+        assert client.delete("/api/pets/missing-pet", headers=headers).status_code == 404
+
+        pet_id = client.post(
+            "/api/pets",
+            json={"species": "dog", "name": "豆包", "gender": "弟弟", "breed": "柯基"},
+            headers=headers,
+        ).json()["pet"]["id"]
+        job_id = client.post(
+            "/api/generations",
+            data={"pet_id": pet_id, "idempotency_key": "del-ready-1"},
+            files={"photo": ("dog.jpg", _make_jpeg_bytes(), "image/jpeg")},
+            headers=headers,
+        ).json()["job"]["id"]
+        done = _wait_job(client, job_id, headers)
+        assert done["status"] == "ready"
+        assert client.put(
+            "/api/current-wallpaper",
+            json={"pet_id": pet_id, "version_id": done["version_id"]},
+            headers=headers,
+        ).status_code == 200
+
+        upload_dir = settings.data_dir / "uploads" / pet_id
+        version_dir = settings.data_dir / "versions" / job_id
+        assert upload_dir.is_dir()
+        assert version_dir.is_dir()
+
+        deleted = client.delete(f"/api/pets/{pet_id}", headers=headers)
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted_pet_id": pet_id, "was_current": True}
+
+        assert client.get("/api/pets", headers=headers).json()["pets"] == []
+        assert client.get(f"/api/generations/{job_id}", headers=headers).status_code == 404
+        assert client.get("/api/current-wallpaper", headers=headers).json()["current"] is None
+        assert not upload_dir.exists()
+        assert not version_dir.exists()
+
+        # 删除正在生成的宠物时应取消后台任务并清理目录
+        slow_pet_id = client.post(
+            "/api/pets",
+            json={"species": "cat", "name": "奶糖"},
+            headers=headers,
+        ).json()["pet"]["id"]
+        slow_job_id = client.post(
+            "/api/generations",
+            data={"pet_id": slow_pet_id, "idempotency_key": "del-slow-1", "mock_delay_seconds": "4.0"},
+            files={"photo": ("cat.jpg", _make_jpeg_bytes(), "image/jpeg")},
+            headers=headers,
+        ).json()["job"]["id"]
+        time.sleep(0.08)
+
+        slow_deleted = client.delete(f"/api/pets/{slow_pet_id}", headers=headers)
+        assert slow_deleted.status_code == 200
+        assert slow_deleted.json() == {"deleted_pet_id": slow_pet_id, "was_current": False}
+        assert not (settings.data_dir / "uploads" / slow_pet_id).exists()
+        assert not (settings.data_dir / "versions" / slow_job_id).exists()

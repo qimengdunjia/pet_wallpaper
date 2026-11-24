@@ -114,6 +114,13 @@ export async function updatePet(
   return data.pet;
 }
 
+export function deletePet(petId: string): Promise<{ deleted_pet_id: string; was_current: boolean }> {
+  return requestJson<{ deleted_pet_id: string; was_current: boolean }>(
+    `/api/pets/${encodeURIComponent(petId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function submitGeneration(input: {
   petId: string;
   idempotencyKey: string;
