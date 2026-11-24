@@ -42,6 +42,7 @@ def video_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int
         prefix: ComfyUI 成片的文件名前缀。
     """
     width, height = size
+    sample_width, sample_height = 1344, 768
     frames = 4 * FPS
     model_frames = frames + (5 - frames % 17) % 17  # H3 的合法帧数为 17k+5。
     timeline = (
@@ -53,15 +54,17 @@ def video_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int
     scale = {"width": width, "height": height, "upscale_method": "bicubic", "crop": "center"}
     return {
         "reference": _node("LoadImage", image=reference),
+        # 先将参考图等比居中裁切到采样尺寸，避免节点对首帧拉伸、对尾帧裁切。
+        "scale_reference": _node("ImageScale", image=["reference", 0], width=sample_width, height=sample_height,
+                                 upscale_method="bicubic", crop="center"),
         "model": _node("UNETLoader", unet_name="minimax_h3_fl2va_pruned_fp8_scaled.safetensors", weight_dtype="default"),
         "lora": _node("LoraLoaderModelOnly", model=["model", 0], lora_name="pika_h3_flex_fl2va_v1_bf16.safetensors",
                       strength_model=1),
         "clip": _node("CLIPLoader", clip_name=CLIP, type="minimax", device="default"),
         "vae": _node("VAELoader", vae_name="minimax_h3_video_vae_fp16.safetensors"),
-        # 复用算法区 1024×576 采样参数，随后独立调整成片尺寸。
         "conditioning": _node("MiniMaxH3ImageToVideo", clip=["clip", 0], vae=["vae", 0], prompt=timeline,
-                              width=1024, height=576, length=model_frames, first_frame=["reference", 0],
-                              last_frame=["reference", 0]),
+                              width=sample_width, height=sample_height, length=model_frames,
+                              first_frame=["scale_reference", 0], last_frame=["scale_reference", 0]),
         "noise": _node("RandomNoise", noise_seed=seed),
         "guider": _node("BasicGuider", model=["lora", 0], conditioning=["conditioning", 0]),
         "sampler": _node("KSamplerSelect", sampler_name="lcm"),
