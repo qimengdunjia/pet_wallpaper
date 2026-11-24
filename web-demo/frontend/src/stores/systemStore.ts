@@ -18,6 +18,7 @@ const VALID_ROUTES = new Set<RouteView>([
   "onboarding-upload",
   "generating",
   "wallpaper",
+  "settings",
 ]);
 
 function readRouteFromHash(): RouteView {
@@ -28,6 +29,7 @@ function readRouteFromHash(): RouteView {
 
 export const systemState = reactive({
   route: readRouteFromHash() as RouteView,
+  settingsReturnRoute: "welcome" as Exclude<RouteView, "settings">,
   // 用于让离开页面前发出的异步操作失效，即使用户又回到同一页面。
   routeRevision: 0,
   drivingMode: "parked" as DrivingMode,
@@ -54,6 +56,9 @@ let toastSeq = 0;
 /** 切换到 view，按 syncHash 同步浏览器地址，并更新实际导航的版本号。 */
 export function setRoute(view: RouteView, options?: { syncHash?: boolean }) {
   if (systemState.route !== view) {
+    if (view === "settings" && systemState.route !== "settings") {
+      systemState.settingsReturnRoute = systemState.route;
+    }
     systemState.routeRevision += 1;
     systemState.route = view;
   }
@@ -118,6 +123,7 @@ export function dismissSafetyAlert() {
 
 export function resetSystemState() {
   setRoute("welcome", { syncHash: false });
+  systemState.settingsReturnRoute = "welcome";
   systemState.drivingMode = "parked";
   systemState.alertVisible = false;
   systemState.toast = null;

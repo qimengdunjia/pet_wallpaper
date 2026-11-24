@@ -1,4 +1,4 @@
-"""文件用途：覆盖网页 Demo 后端 API、照片校验、幂等生成、Range 请求、重启恢复与可灵适配的离线回归测试。"""
+"""文件用途：覆盖网页 Demo 设置认证、照片校验、幂等生成、媒体读取、任务恢复与可灵适配。"""
 
 from __future__ import annotations
 
@@ -44,6 +44,7 @@ def _make_settings(tmp_path: Path, **overrides) -> Settings:
         frontend_dist=tmp_path / "no-dist",
         mock_delay_seconds=overrides.get("mock_delay_seconds", 0.06),
         mock_controls_enabled=overrides.get("mock_controls_enabled", True),
+        settings_password=overrides.get("settings_password", ""),
         kling_api_key=overrides.get("kling_api_key", ""),
         kling_base_url=overrides.get("kling_base_url", "https://api-beijing.klingai.com"),
         kling_poll_seconds=overrides.get("kling_poll_seconds", 0.01),
@@ -62,6 +63,33 @@ def _wait_job(client: TestClient, job_id: str, headers: dict | None = None, time
             return job
         time.sleep(0.05)
     raise AssertionError(f"任务 {job_id} 在 {timeout}s 内未结束")
+
+
+def test_settings_require_password_and_survive_restart(tmp_path: Path):
+    settings = _make_settings(tmp_path, settings_password="设置验收口令")
+    login = {"password": "设置验收口令"}
+    with TestClient(create_app(settings)) as client:
+        assert client.post("/api/settings/unlock", json={"password": "错误密码"}).status_code == 401
+        unlocked = client.post("/api/settings/unlock", json=login).json()
+        generation = unlocked["settings"]
+        assert (generation["image_width"], generation["image_height"]) == (2560, 1440)
+        assert (generation["video_width"], generation["video_height"]) == (1920, 1080)
+        for species in ("cat", "dog"):
+            assert set(generation["prompts"][species]) == {"image", "idle", "left", "center", "right"}
+
+        generation["provider"] = "comfyui"
+        generation["prompts"]["cat"]["idle"] = "轻轻呼吸，首尾保持同一姿势。"
+        generation["prompts"]["dog"]["right"] = "用鼻尖碰触右侧热区。"
+        assert client.put("/api/settings", json=generation).status_code == 401
+        auth = {"Authorization": f"Bearer {unlocked['token']}"}
+        invalid = {**generation, "video_height": 1081}
+        assert client.put("/api/settings", headers=auth, json=invalid).status_code == 422
+        assert client.put("/api/settings", headers=auth, json=generation).status_code == 200
+        assert client.get("/api/config").json()["provider"] == "comfyui"
+
+    with TestClient(create_app(settings)) as client:
+        assert client.put("/api/settings", headers=auth, json=generation).status_code == 401
+        assert client.post("/api/settings/unlock", json=login).json()["settings"] == generation
 
 
 def test_pet_crud_and_photo_validation(tmp_path: Path):
@@ -521,8 +549,6 @@ def test_default_wallpaper_config_assets_and_switch_back(tmp_path: Path):
         assert dw["version_id"] == "default-dog-v1"
         assert dw["pet"]["is_default"] is True
         assert dw["pet"]["species"] == "dog"
-        assert dw["assets"]["idle_image"]["width"] == 1920
-        assert dw["assets"]["idle_image"]["height"] == 1080
         assert dw["assets"]["idle_video"]["width"] == 1920
         assert dw["assets"]["idle_video"]["height"] == 1080
         assert dw["assets"]["idle_video"]["fps"] == 24.0
@@ -535,7 +561,10 @@ def test_default_wallpaper_config_assets_and_switch_back(tmp_path: Path):
         # 验证默认壁纸静态首帧及视频槽位可正常读取与 Range 分段请求
         idle_img_resp = client.get(dw["assets"]["idle_image"]["url"])
         assert idle_img_resp.status_code == 200
-        assert idle_img_resp.content[:2] == b"\xff\xd8"
+        idle_meta = dw["assets"]["idle_image"]
+        with Image.open(io.BytesIO(idle_img_resp.content)) as idle_image:
+            assert idle_image.size == (idle_meta["width"], idle_meta["height"])
+            assert Image.MIME[idle_image.format] == idle_meta["mime"] == idle_img_resp.headers["content-type"]
 
         for video_url in (
             dw["assets"]["idle_video"]["url"],

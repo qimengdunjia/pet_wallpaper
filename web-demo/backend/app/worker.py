@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import logging
+from dataclasses import replace
 from pathlib import Path
 from shutil import copyfile
 
 from .config import Settings
 from .db import DemoDatabase
 from .media import AssetValidationError, validate_asset_bundle
-from .providers import BaseGenerationProvider, ProviderError
+from .providers import BaseGenerationProvider, ProviderError, build_provider
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,10 @@ logger = logging.getLogger(__name__)
 class GenerationWorker:
     """管理所有宠物生成任务的并发执行与 SQLite 状态落盘。"""
 
-    def __init__(self, settings: Settings, db: DemoDatabase, provider: BaseGenerationProvider):
+    def __init__(self, settings: Settings, db: DemoDatabase, provider: BaseGenerationProvider | None = None):
         self.settings = settings
         self.db = db
-        self.provider = provider
+        self._providers = {settings.provider: provider} if provider is not None else {}
         self._semaphore = asyncio.Semaphore(2)  # 允许猫狗同时提交时并发推进、先后就绪
         self._tasks: dict[str, asyncio.Task] = {}
         self._lock_handle = None
@@ -63,7 +64,8 @@ class GenerationWorker:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
-        await self.provider.close()
+        for provider in self._providers.values():
+            await provider.close()
         if self._lock_handle is not None:
             fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
             self._lock_handle.close()
@@ -102,13 +104,26 @@ class GenerationWorker:
 
             try:
                 self.db.update_job_progress(job_id, status="generating", stage="idle", progress=max(job["progress"], 5))
-                idle_path, action_paths = await self.provider.generate(
+                # 任务按提交时的供应商执行，切换设置后仍可恢复原任务。
+                mode = job["provider"]
+                if mode not in self._providers:
+                    self._providers[mode] = build_provider(replace(self.settings, provider=mode))
+                idle_path, action_paths = await self._providers[mode].generate(
                     job_runtime, pet, work_dir, persist_remote, update_progress
                 )
                 self.db.update_job_progress(job_id, status="generating", stage="validating", progress=96)
                 idle_meta, actions_meta = await asyncio.to_thread(
                     validate_asset_bundle, idle_path, action_paths
                 )
+                generation = job.get("generation_config") or {}
+                if mode == "comfyui" and generation:
+                    if (idle_meta["width"], idle_meta["height"]) != (generation["image_width"], generation["image_height"]):
+                        raise AssetValidationError("ComfyUI 待机图分辨率与任务设置不一致")
+                    video_size = (generation["video_width"], generation["video_height"])
+                    if "idle-video" not in actions_meta or any(
+                        (meta["width"], meta["height"]) != video_size for meta in actions_meta.values()
+                    ):
+                        raise AssetValidationError("ComfyUI 缺少待机视频或视频分辨率与任务设置不一致")
                 # 统一记录相对于 data_dir 的安全路径
                 idle_rel = self._rel_path(idle_path)
                 for slot, video_path in action_paths.items():

@@ -36,7 +36,7 @@ npm run build
 cd ../..
 ```
 
-> 如需使用可灵真实生成，可在 `web-demo/backend/.env` 中设置 `DEMO_PROVIDER=kling` 并填写 `KLING_API_KEY`。
+> 网页 Demo 底栏的齿轮可解锁生成设置，切换 Mock、ComfyUI 或可灵并编辑猫狗动作提示词。密码、ComfyUI 地址和可灵密钥的配置见[后端说明](web-demo/backend/README.md)。
 
 ### 启动与离线验证
 

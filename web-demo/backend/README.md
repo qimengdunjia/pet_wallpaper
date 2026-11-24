@@ -6,10 +6,11 @@
 
 ## 目录结构
 
-- [`app/config.py`](app/config.py)：读取 `.env` 与环境变量配置（供应商模式、数据目录、可灵配置）
-- [`app/db.py`](app/db.py)：SQLite WAL 持久化（`pets`、`generation_jobs`、`asset_versions`、`current_wallpapers`）
+- [`app/config.py`](app/config.py)：读取 `.env` 与环境变量中的供应商地址、数据目录和设置密码
+- [`app/db.py`](app/db.py)：使用 SQLite WAL 持久化宠物档案、生成任务、生成设置以及壁纸版本
 - [`app/media.py`](app/media.py)：照片规范化校验、FFprobe 视频规格读取、版本资产完整性校验
 - [`app/providers.py`](app/providers.py)：`mock` 和 `kling` 生成适配器，可灵复用 `algorithm-lab` 的 PRD 提示词
+- [`app/comfyui.py`](app/comfyui.py)：提交 MiniMax H3 生图和 Pika H3 视频任务，查询历史并下载成品
 - [`app/worker.py`](app/worker.py)：单实例任务锁、并发生成调度与进程重启恢复
 - [`app/main.py`](app/main.py)：API 路由、同源静态文件托管与 HTTP Range 支持
 - [`tests/test_api.py`](tests/test_api.py)：接口、幂等、Range 请求、重启恢复与可灵适配器单测
@@ -23,4 +24,12 @@ cp -n web-demo/backend/.env.example web-demo/backend/.env
 bash scripts/run_demo.sh
 ```
 
-在 `web-demo/backend/.env` 中配置 `DEMO_PROVIDER=kling` 和 `KLING_API_KEY` 可使用可灵真实生成。ComfyUI 工作流使用[算法验证区](../../algorithm-lab/README.md)运行。
+点击 Demo 底栏的齿轮，输入密码进入「生成设置」。密码由 `DEMO_SETTINGS_PASSWORD` 指定，留空时服务首次启动会生成密码并写入数据目录的 `settings-password`。默认路径是 `web-demo/backend/data/settings-password`。
+
+使用 ComfyUI 时，将 `z890ud` 的 `8188` 端口转发到本机 `18188`，并在设置页选择 ComfyUI。服务地址可由后端的 `COMFYUI_BASE_URL` 覆盖。默认生图尺寸为 2560×1440，视频以 1024×576 采样，默认导出 1920×1080、24 fps 的 MP4。待机、左侧、中央和右侧各有一段四秒视频，猫咪与狗狗分别保存提示词。
+
+```bash
+ssh -N -L 127.0.0.1:18188:127.0.0.1:8188 z890ud
+```
+
+可灵需在 `web-demo/backend/.env` 中配置 `KLING_API_KEY`。可灵使用待机图和三个交互提示词。待机视频提示词和可编辑分辨率用于 ComfyUI。设置页保存后立即作用于新任务，同时保存在 SQLite 中，重启后继续生效。`DEMO_PROVIDER` 用于首次保存之前的初始模式。

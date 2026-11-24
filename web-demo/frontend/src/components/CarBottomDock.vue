@@ -22,9 +22,9 @@ const isDarkStage = computed(
     systemState.route === "generating",
 );
 
-// MasterGo 底栏从左到右为设置、全景影像、导航、音乐和应用中心。
+// MasterGo 底栏从左到右为生成设置、全景影像、导航、音乐和应用中心。
 const dockApps = [
-  { label: "车辆设置", icon: settingsIcon },
+  { label: "生成设置", icon: settingsIcon, action: openSettings },
   { label: "全景影像", icon: camera360Icon },
   { label: "导航", icon: navigationIcon },
   { label: "音乐", icon: musicIcon },
@@ -42,6 +42,11 @@ function handleHomeClick() {
 
 function handleDockHint(label: string) {
   showToast(`车机系统控件：${label}（高优先级控件层，不透传壁纸点击）`, "info", 2000);
+}
+
+function openSettings() {
+  interruptPlayback();
+  setRoute("settings");
 }
 </script>
 
@@ -72,7 +77,8 @@ function handleDockHint(label: string) {
         class="dock-app-tile"
         :class="{ 'music-tile': app.label === '音乐' }"
         :title="app.label"
-        @click="handleDockHint(app.label)"
+        :aria-label="app.label"
+        @click="app.action ? app.action() : handleDockHint(app.label)"
       >
         <img :src="app.icon" alt="" />
       </button>

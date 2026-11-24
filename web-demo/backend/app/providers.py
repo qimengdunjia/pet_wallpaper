@@ -1,4 +1,4 @@
-"""文件用途：实现 Mock 和可灵的宠物壁纸与动作生成供应商适配器。"""
+"""文件用途：定义宠物壁纸生成接口和供应商工厂，包含 Mock 和可灵实现。"""
 
 from __future__ import annotations
 
@@ -205,9 +205,9 @@ class KlingGenerationProvider(BaseGenerationProvider):
             )
         return payload
 
-    async def _submit_idle(self, photo_path: Path, species: str, external_id: str) -> str:
+    async def _submit_idle(self, photo_path: Path, species: str, external_id: str, prompt: str | None = None) -> str:
         preset_key = "cat-idle" if species == "cat" else "dog-idle"
-        prompt = ALGO_IMAGE_PRESETS[preset_key]["prompt"]
+        prompt = prompt or ALGO_IMAGE_PRESETS[preset_key]["prompt"]
         encoded = base64.b64encode(photo_path.read_bytes()).decode("ascii")
         payload = {
             "model_name": "kling-v3-omni",
@@ -236,9 +236,11 @@ class KlingGenerationProvider(BaseGenerationProvider):
         msg = self._safe_message(task.get("task_status_msg", ""))
         return str(state or ""), str(url) if url else None, msg
 
-    async def _submit_action_video(self, idle_path: Path, species: str, direction: str) -> str:
+    async def _submit_action_video(
+        self, idle_path: Path, species: str, direction: str, prompt: str | None = None
+    ) -> str:
         preset_key = f"{species}-{direction}"
-        prompt = ALGO_VIDEO_PRESETS[preset_key]["prompt"]
+        prompt = prompt or ALGO_VIDEO_PRESETS[preset_key]["prompt"]
         encoded = base64.b64encode(idle_path.read_bytes()).decode("ascii")
         # 严格复用同一张待机图作为首帧与尾帧
         contents = [
@@ -343,6 +345,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
     ) -> tuple[Path, dict[str, Path]]:
         output_dir.mkdir(parents=True, exist_ok=True)
         remote = dict(job.get("remote_tasks") or {})
+        prompts = (job.get("generation_config") or {}).get("prompts", {})
 
         # 1) 待机图阶段
         idle_rec = remote.get("idle", {})
@@ -361,7 +364,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
                 remote["idle"] = idle_rec
                 await persist_remote(remote)
                 provider_id = await self._submit_idle(
-                    Path(job["photo_path"]), pet["species"], idle_rec["external_id"]
+                    Path(job["photo_path"]), pet["species"], idle_rec["external_id"], prompts.get("image")
                 )
                 idle_rec.update(state="running", provider_id=provider_id)
                 remote["idle"] = idle_rec
@@ -392,7 +395,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
                 rec = {"state": "submitting", "external_id": f"{job['id']}-{direction}"}
                 remote[direction] = rec
                 await persist_remote(remote)
-                provider_id = await self._submit_action_video(idle_path, pet["species"], direction)
+                provider_id = await self._submit_action_video(idle_path, pet["species"], direction, prompts.get(direction))
                 rec.update(state="running", provider_id=provider_id)
                 remote[direction] = rec
                 await persist_remote(remote)
@@ -415,4 +418,8 @@ def build_provider(settings: Settings) -> BaseGenerationProvider:
         return MockGenerationProvider(settings)
     if settings.provider == "kling":
         return KlingGenerationProvider(settings)
+    if settings.provider == "comfyui":
+        from .comfyui import ComfyUIGenerationProvider
+
+        return ComfyUIGenerationProvider(settings)
     raise ValueError(f"不支持的供应商模式: {settings.provider}")

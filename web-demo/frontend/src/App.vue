@@ -21,6 +21,7 @@ import {
 } from "@/stores/petStore";
 import { setDisplayedWallpaper } from "@/stores/playerStore";
 import { setRoute, systemState } from "@/stores/systemStore";
+import type { RouteView } from "@/types";
 import CarBottomDock from "@/components/CarBottomDock.vue";
 import DemoControlDrawer from "@/components/DemoControlDrawer.vue";
 import SystemAlertOverlay from "@/components/SystemAlertOverlay.vue";
@@ -29,6 +30,7 @@ import HomeReturnView from "@/views/HomeReturnView.vue";
 import LoadingTransitionView from "@/views/LoadingTransitionView.vue";
 import OnboardingSpeciesView from "@/views/OnboardingSpeciesView.vue";
 import OnboardingUploadView from "@/views/OnboardingUploadView.vue";
+import SettingsView from "@/views/SettingsView.vue";
 import WallpaperStageView from "@/views/WallpaperStageView.vue";
 import WelcomeView from "@/views/WelcomeView.vue";
 
@@ -59,6 +61,14 @@ async function bootstrap() {
     }
 
     const hashRoute = window.location.hash.replace(/^#\/?/, "").trim();
+    const navigate = (route: Exclude<RouteView, "settings">) => {
+      if (hashRoute === "settings") {
+        setRoute("settings");
+        systemState.settingsReturnRoute = route;
+      } else {
+        setRoute(route);
+      }
+    };
 
     if (currentWallpaper) {
       setDisplayedWallpaper(
@@ -68,35 +78,35 @@ async function bootstrap() {
       );
       preloadAssetVideosBackground(currentWallpaper.assets);
       if (hashRoute === "home") {
-        setRoute("home");
-      } else if (hashRoute === "generating" && activeJobs.length > 0) {
+        navigate("home");
+      } else if ((hashRoute === "generating" || hashRoute === "settings") && activeJobs.length > 0) {
         startWaitingBatch(activeJobs.map((j) => j.id));
-        setRoute("generating");
+        navigate("generating");
       } else {
-        setRoute("wallpaper");
+        navigate("wallpaper");
       }
     } else if (activeJobs.length > 0) {
       startWaitingBatch(activeJobs.map((j) => j.id));
-      setRoute("generating");
+      navigate("generating");
     } else if (config.default_wallpaper) {
       const defWp = config.default_wallpaper;
       setDisplayedWallpaper(defWp.pet_id, defWp.version_id, defWp.assets);
       preloadAssetVideosBackground(defWp.assets);
       if (hashRoute === "welcome") {
-        setRoute("welcome");
+        navigate("welcome");
       } else if (hashRoute === "home") {
-        setRoute("home");
+        navigate("home");
       } else {
-        setRoute("wallpaper");
+        navigate("wallpaper");
       }
     } else {
       const readyPet = getFirstReadyPet();
       if (readyPet && readyPet.active_assets && readyPet.active_version_id) {
         setDisplayedWallpaper(readyPet.id, readyPet.active_version_id, readyPet.active_assets);
         preloadAssetVideosBackground(readyPet.active_assets);
-        setRoute(hashRoute === "wallpaper" ? "wallpaper" : "home");
+        navigate(hashRoute === "wallpaper" ? "wallpaper" : "home");
       } else {
-        setRoute("welcome");
+        navigate("welcome");
       }
     }
   } catch (err) {
@@ -115,7 +125,8 @@ function handleHashChange() {
     hash === "onboarding-species" ||
     hash === "onboarding-upload" ||
     hash === "generating" ||
-    hash === "wallpaper"
+    hash === "wallpaper" ||
+    hash === "settings"
   ) {
     setRoute(hash, { syncHash: false });
   }
@@ -160,6 +171,7 @@ onBeforeUnmount(() => {
       <OnboardingUploadView v-else-if="systemState.route === 'onboarding-upload'" />
       <LoadingTransitionView v-else-if="systemState.route === 'generating'" />
       <WallpaperStageView v-else-if="systemState.route === 'wallpaper'" />
+      <SettingsView v-else-if="systemState.route === 'settings'" />
     </template>
 
     <CarBottomDock />

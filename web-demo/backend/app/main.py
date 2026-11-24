@@ -14,12 +14,13 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from .config import Settings
 from .db import DemoDatabase, GenerationKeyConflict
+from .generation_settings import GenerationSettings, SettingsAccess, SettingsLogin, default_generation_settings
 from .media import PhotoValidationError, inspect_image, inspect_video, normalize_photo
-from .providers import BaseGenerationProvider, build_provider
+from .providers import BaseGenerationProvider
 from .worker import GenerationWorker
 
 SESSION_COOKIE = "pet_demo_session"
@@ -84,7 +85,7 @@ def serialize_version(version: dict, session_id: str = "default") -> dict:
             "url": f"/api/media/versions/{vid}/{slot}{suffix}",
             **meta,
         }
-    return {
+    assets = {
         "version_id": vid,
         "version_number": version["version_number"],
         "created_at": version["created_at"],
@@ -94,6 +95,12 @@ def serialize_version(version: dict, session_id: str = "default") -> dict:
         },
         "actions": actions,
     }
+    if video := version["actions"].get("idle-video"):
+        assets["idle_video"] = {
+            **{key: value for key, value in video.items() if key != "file_path"},
+            "url": f"/api/media/versions/{vid}/idle-video{suffix}",
+        }
+    return assets
 
 
 def serialize_job(job: dict, db: DemoDatabase, session_id: str = "default") -> dict:
@@ -224,8 +231,12 @@ def create_app(
     """构造独立 FastAPI 实例；支持注入自定义配置与测试供应商。"""
     config = settings or Settings.from_env()
     db = DemoDatabase(config.data_dir / "demo.sqlite3")
-    active_provider = provider or build_provider(config)
-    worker = GenerationWorker(config, db, active_provider)
+    worker = GenerationWorker(config, db, provider)
+    settings_access = SettingsAccess(config.data_dir, config.settings_password)
+    initial_generation = default_generation_settings(config.provider)
+
+    def generation_settings() -> dict:
+        return db.get_generation_settings() or initial_generation
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -277,9 +288,10 @@ def create_app(
         transitions = manifest.get("transitions", {})
         intro = transitions.get("intro", {})
         loop = transitions.get("loop", {})
+        mode = generation_settings()["provider"]
         return {
-            "provider": config.provider,
-            "mock_controls_enabled": config.mock_controls_enabled,
+            "provider": mode,
+            "mock_controls_enabled": mode == "mock" and config.mock_controls_enabled,
             "default_mock_delay_seconds": config.mock_delay_seconds,
             "max_upload_mb": config.max_upload_bytes // 1024 // 1024,
             "transitions": {
@@ -292,6 +304,29 @@ def create_app(
             },
             "default_wallpaper": _build_default_wallpaper(config.assets_dir, manifest),
         }
+
+    @app.post("/api/settings/unlock")
+    def unlock_settings(login: SettingsLogin):
+        """验证设置密码，返回访问令牌及当前生成设置。"""
+        token = settings_access.unlock(login.password.get_secret_value())
+        if token is None:
+            raise HTTPException(401, "设置密码错误")
+        return {"token": token, "settings": generation_settings()}
+
+    @app.put("/api/settings")
+    def save_settings(settings: dict, authorization: str = Header(default="")):
+        """凭短期令牌保存生成配置，返回校验后的设置及 Mock 控件状态。"""
+        if not settings_access.allows(authorization):
+            raise HTTPException(401, "请重新输入设置密码")
+        try:
+            validated = GenerationSettings.model_validate(settings)
+        except ValidationError as exc:
+            raise HTTPException(422, "提示词需为 1–2500 字，尺寸需在 128–4096 像素内，生图宽高为 32 的倍数，视频宽高为偶数") from exc
+        if validated.provider == "kling" and not config.kling_api_key:
+            raise HTTPException(422, "请先在后端配置 KLING_API_KEY")
+        saved = validated.model_dump()
+        db.save_generation_settings(saved)
+        return {"settings": saved, "mock_controls_enabled": validated.provider == "mock" and config.mock_controls_enabled}
 
     @app.get("/api/assets/manifest")
     def get_assets_manifest():
@@ -320,6 +355,10 @@ def create_app(
         target, media_type = allowed[slot]
         if not target.is_file():
             raise HTTPException(404, "默认壁纸素材不存在")
+        if slot == "idle":
+            manifest = _load_assets_manifest(config.assets_dir)
+            meta = (manifest.get("default_wallpaper") or {}).get("idle_image")
+            media_type = _strip_asset_meta(meta, lambda: inspect_image(target)).get("mime", media_type)
         return FileResponse(target, media_type=media_type)
 
     @app.get("/api/assets/samples/{species}/upload")
@@ -424,8 +463,10 @@ def create_app(
         else:
             raise HTTPException(422, "请上传一张清晰的宠物正面照")
 
+        selected = generation_settings()
+        mode = selected["provider"]
         mock_options: dict = {}
-        if config.mock_controls_enabled:
+        if mode == "mock" and config.mock_controls_enabled:
             if mock_delay_seconds is not None:
                 mock_options["delay_seconds"] = max(0.05, min(float(mock_delay_seconds), 120.0))
             if mock_fail or mock_fail_stage:
@@ -440,9 +481,14 @@ def create_app(
                 session_id=session_id,
                 pet_id=pet_id,
                 idempotency_key=idem_key,
-                provider=config.provider,
+                provider=mode,
                 photo_path=saved_rel_photo,
                 mock_options=mock_options,
+                generation_config={
+                    "prompts": selected["prompts"][pet["species"]],
+                    **{key: selected[key] for key in ("image_width", "image_height", "video_width", "video_height")},
+                    **({"comfyui_base_url": config.comfyui_base_url} if mode == "comfyui" else {}),
+                } if mode != "mock" else None,
             )
         except Exception as exc:
             if new_upload_path is not None:
@@ -540,7 +586,7 @@ def create_app(
     def get_version_media(
         request: Request,
         version_id: str,
-        slot: Literal["idle", "left", "center", "right"],
+        slot: Literal["idle", "idle-video", "left", "center", "right"],
     ):
         session_id = resolve_session_id(request)
         version = db.get_version_for_session(session_id, version_id)
@@ -550,7 +596,10 @@ def create_app(
             rel_path = version["idle_image_path"]
             media_type = version["idle_meta"].get("mime", "image/jpeg")
         else:
-            rel_path = version["actions"][slot]["file_path"]
+            video = version["actions"].get(slot)
+            if video is None:
+                raise HTTPException(404, "动作视频不存在")
+            rel_path = video["file_path"]
             media_type = "video/mp4"
         path = worker.resolve_data_path(rel_path)
         if not path.is_file():

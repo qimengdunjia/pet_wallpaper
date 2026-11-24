@@ -3,13 +3,26 @@ export type Species = "cat" | "dog";
 export type Gender = "弟弟" | "妹妹" | "未设置";
 export type HotzoneSlot = "left" | "center" | "right";
 export type DrivingMode = "parked" | "driving";
+export type ProviderMode = "mock" | "kling" | "comfyui";
+export type ActionSlot = "idle" | HotzoneSlot;
 export type RouteView =
   | "welcome"
   | "home"
   | "onboarding-species"
   | "onboarding-upload"
   | "generating"
-  | "wallpaper";
+  | "wallpaper"
+  | "settings";
+
+export interface GenerationSettings {
+  provider: ProviderMode;
+  image_width: number;
+  image_height: number;
+  video_width: number;
+  video_height: number;
+  // 每种宠物有四段动作视频，待机图另有一条提示词。
+  prompts: Record<Species, Record<ActionSlot | "image", string>>;
+}
 
 export interface ImageAssetMeta {
   url: string;
@@ -81,7 +94,7 @@ export interface CurrentWallpaper {
 }
 
 export interface AppConfig {
-  provider: "mock" | "kling";
+  provider: ProviderMode;
   mock_controls_enabled: boolean;
   default_mock_delay_seconds: number;
   max_upload_mb: number;

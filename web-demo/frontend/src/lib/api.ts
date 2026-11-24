@@ -1,8 +1,10 @@
+// 文件用途：封装网页 Demo 的同源接口，包含宠物档案、生成任务和设置管理。
 import type {
   AppConfig,
   CurrentWallpaper,
   Gender,
   GenerationJob,
+  GenerationSettings,
   PetProfile,
   Species,
 } from "@/types";
@@ -58,6 +60,27 @@ export function createIdempotencyKey(prefix = "gen"): string {
 
 export async function fetchConfig(): Promise<AppConfig> {
   return requestJson<AppConfig>("/api/config");
+}
+
+/** 用设置密码换取短期令牌，并返回当前生成设置。 */
+export function unlockGenerationSettings(password: string): Promise<{ token: string; settings: GenerationSettings }> {
+  return requestJson("/api/settings/unlock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+}
+
+/** 使用页面持有的 token 保存 settings，返回生效设置和模拟控件状态。 */
+export function saveGenerationSettings(
+  token: string,
+  settings: GenerationSettings,
+): Promise<{ settings: GenerationSettings; mock_controls_enabled: boolean }> {
+  return requestJson("/api/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(settings),
+  });
 }
 
 export async function fetchPets(): Promise<PetProfile[]> {

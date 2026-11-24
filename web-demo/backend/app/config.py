@@ -14,7 +14,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 WEB_DEMO_ROOT = BACKEND_ROOT.parent
 REPO_ROOT = WEB_DEMO_ROOT.parent
 
-ProviderMode = Literal["mock", "kling"]
+ProviderMode = Literal["mock", "kling", "comfyui"]
 
 
 def _resolve_path(raw: str | None, default: Path, base: Path) -> Path:
@@ -40,6 +40,10 @@ class Settings:
     frontend_dist: Path = WEB_DEMO_ROOT / "frontend" / "dist"
     mock_delay_seconds: float = 2.0
     mock_controls_enabled: bool = True
+    settings_password: str = field(default="", repr=False)  # 设置页密码，可由环境变量覆盖。
+    comfyui_base_url: str = "http://127.0.0.1:18188"  # 本机 SSH 转发入口。
+    comfyui_poll_seconds: float = 3.0
+    comfyui_task_timeout: float = 1800.0
     kling_api_key: str = field(default="", repr=False)
     kling_base_url: str = "https://api-beijing.klingai.com"
     kling_poll_seconds: float = 15.0
@@ -52,10 +56,8 @@ class Settings:
         """从 .env 与环境变量加载配置并校验合法性。"""
         load_dotenv(BACKEND_ROOT / ".env", override=False)
         provider_raw = os.getenv("DEMO_PROVIDER", "mock").strip().lower()
-        if provider_raw == "comfyui":
-            raise ValueError("ComfyUI 工作流请在 algorithm-lab 验证；网页 Demo 支持 DEMO_PROVIDER=mock 或 kling")
-        if provider_raw not in {"mock", "kling"}:
-            raise ValueError("DEMO_PROVIDER 仅支持 mock 或 kling")
+        if provider_raw not in {"mock", "kling", "comfyui"}:
+            raise ValueError("DEMO_PROVIDER 仅支持 mock、kling 或 comfyui")
         provider: ProviderMode = provider_raw  # type: ignore[assignment]
 
         kling_base = os.getenv("KLING_BASE_URL", cls.kling_base_url).strip().rstrip("/")
@@ -63,8 +65,14 @@ class Settings:
         if parsed_kling.scheme != "https" or not parsed_kling.hostname:
             raise ValueError("KLING_BASE_URL 必须是合法的 HTTPS 地址")
 
+        comfyui_base = os.getenv("COMFYUI_BASE_URL", cls.comfyui_base_url).strip().rstrip("/")
+        parsed_comfyui = urlparse(comfyui_base)
+        if (parsed_comfyui.scheme not in {"http", "https"} or not parsed_comfyui.hostname
+                or parsed_comfyui.username or parsed_comfyui.query or parsed_comfyui.fragment):
+            raise ValueError("COMFYUI_BASE_URL 必须是合法的 HTTP 或 HTTPS 地址")
+
         mock_delay = max(0.05, float(os.getenv("DEMO_MOCK_DELAY_SECONDS", str(cls.mock_delay_seconds))))
-        mock_controls = _parse_bool(os.getenv("DEMO_MOCK_CONTROLS"), default=(provider == "mock"))
+        mock_controls = _parse_bool(os.getenv("DEMO_MOCK_CONTROLS"), default=True)
 
         return cls(
             provider=provider,
@@ -75,6 +83,10 @@ class Settings:
             ),
             mock_delay_seconds=mock_delay,
             mock_controls_enabled=mock_controls,
+            settings_password=os.getenv("DEMO_SETTINGS_PASSWORD", ""),
+            comfyui_base_url=comfyui_base,
+            comfyui_poll_seconds=max(0.5, float(os.getenv("COMFYUI_POLL_SECONDS", str(cls.comfyui_poll_seconds)))),
+            comfyui_task_timeout=max(30.0, float(os.getenv("COMFYUI_TASK_TIMEOUT_SECONDS", str(cls.comfyui_task_timeout)))),
             kling_api_key=os.getenv("KLING_API_KEY", "").strip(),
             kling_base_url=kling_base,
             kling_poll_seconds=max(1.0, float(os.getenv("KLING_POLL_SECONDS", str(cls.kling_poll_seconds)))),

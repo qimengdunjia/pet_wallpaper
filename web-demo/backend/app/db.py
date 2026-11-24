@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
     photo_path TEXT NOT NULL,
     remote_tasks_json TEXT NOT NULL DEFAULT '{}',
     mock_options_json TEXT NOT NULL DEFAULT '{}',
+    generation_config_json TEXT NOT NULL DEFAULT '{}',
     version_id TEXT,
     error_message TEXT,
     created_at TEXT NOT NULL,
@@ -77,6 +78,11 @@ CREATE TABLE IF NOT EXISTS current_wallpapers (
     pet_id TEXT NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
     version_id TEXT NOT NULL REFERENCES asset_versions(id) ON DELETE CASCADE,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS generation_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    settings_json TEXT NOT NULL
 );
 """
 
@@ -110,6 +116,7 @@ def _row_to_job(row: sqlite3.Row) -> dict:
         "photo_path": row["photo_path"],
         "remote_tasks": json.loads(row["remote_tasks_json"]),
         "mock_options": json.loads(row["mock_options_json"]),
+        "generation_config": json.loads(row["generation_config_json"]),  # 提交时冻结的生成参数。
         "version_id": row["version_id"],
         "error_message": row["error_message"],
         "created_at": row["created_at"],
@@ -150,6 +157,24 @@ class DemoDatabase:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(SCHEMA_SQL)
+            job_columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(generation_jobs)")}
+            if "generation_config_json" not in job_columns:
+                self._conn.execute("ALTER TABLE generation_jobs ADD COLUMN generation_config_json TEXT NOT NULL DEFAULT '{}'")
+
+    def get_generation_settings(self) -> dict | None:
+        """读取管理员保存的生成设置；尚未保存时返回 None。"""
+        with self._lock:
+            row = self._conn.execute("SELECT settings_json FROM generation_settings WHERE id = 1").fetchone()
+        return json.loads(row["settings_json"]) if row else None
+
+    def save_generation_settings(self, settings: dict) -> None:
+        """将已校验的生成设置整体写入 SQLite，无返回值。"""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO generation_settings (id, settings_json) VALUES (1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET settings_json = excluded.settings_json",
+                (json.dumps(settings, ensure_ascii=False),),
+            )
 
     def close(self) -> None:
         with self._lock:
@@ -245,8 +270,9 @@ class DemoDatabase:
         provider: str,
         photo_path: str,
         mock_options: dict | None = None,
+        generation_config: dict | None = None,
     ) -> dict:
-        """为指定会话和宠物保存照片引用、供应商及模拟选项，返回排队任务。
+        """为指定会话和宠物保存照片引用、供应商、模拟选项及生成参数快照，返回排队任务。
 
         幂等键已存在时抛出 GenerationKeyConflict，保留原任务及宠物档案。
         """
@@ -257,9 +283,9 @@ class DemoDatabase:
                 """
                 INSERT INTO generation_jobs (
                     id, session_id, pet_id, idempotency_key, provider, status, stage, progress,
-                    photo_path, remote_tasks_json, mock_options_json, created_at, updated_at
+                    photo_path, remote_tasks_json, mock_options_json, generation_config_json, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, 'queued', 'queued', 0, ?, '{}', ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'queued', 'queued', 0, ?, '{}', ?, ?, ?, ?)
                 ON CONFLICT(session_id, idempotency_key) DO NOTHING
                 """,
                 (
@@ -270,6 +296,7 @@ class DemoDatabase:
                     provider,
                     photo_path,
                     json.dumps(mock_options or {}, ensure_ascii=False),
+                    json.dumps(generation_config or {}, ensure_ascii=False),
                     ts,
                     ts,
                 ),

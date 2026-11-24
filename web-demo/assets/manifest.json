@@ -37,11 +37,11 @@
     "breed": "默认壁纸",
     "idle_image": {
       "path": "default-wallpaper/idle.jpg",
-      "format": "jpeg",
-      "mime": "image/jpeg",
-      "width": 1920,
-      "height": 1080,
-      "size_bytes": 228451
+      "format": "png",
+      "mime": "image/png",
+      "width": 2560,
+      "height": 1440,
+      "size_bytes": 4562852
     },
     "idle_video": {
       "path": "default-wallpaper/idle.mp4",
