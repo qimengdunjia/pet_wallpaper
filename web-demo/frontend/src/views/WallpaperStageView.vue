@@ -1,8 +1,9 @@
 <!-- 文件用途：在等比画布播放宠物壁纸，管理热区、模式按钮与宠物弹层。 -->
 <script setup lang="ts">
 import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { hotzoneLabel, resolveHotzone } from "@/lib/hotzone";
+import { getPlayableVideoUrl, preloadAssetVideosBackground, preloadVideoBlob } from "@/lib/preload";
 import { findPetById } from "@/stores/petStore";
 import {
   completeActionPlayback,
@@ -17,12 +18,22 @@ import type { HotzoneSlot } from "@/types";
 import PetConfirmModal from "@/components/PetConfirmModal.vue";
 import PetEditModal from "@/components/PetEditModal.vue";
 import PetSelectorPanel from "@/components/PetSelectorPanel.vue";
+import SeamlessLoopVideo from "@/components/SeamlessLoopVideo.vue";
+
+type VideoWithRVFC = HTMLVideoElement & {
+  requestVideoFrameCallback?: (callback: (now: number, metadata: unknown) => void) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+};
 
 const clockText = useClock();
 const canvasRef = ref<HTMLElement | null>(null);
-const idleVideoRef = ref<HTMLVideoElement | null>(null);
 const videoRefs = ref<Partial<Record<HotzoneSlot, HTMLVideoElement>>>({});
+const readyActionSlot = ref<HotzoneSlot | null>(null);
+const fadingActionSlot = ref<HotzoneSlot | null>(null);
+const actionSrcs = ref<Record<HotzoneSlot, string>>({ left: "", center: "", right: "" });
 let actionSafetyTimer: number | null = null;
+let idleResumeFallbackTimer: number | null = null;
+let actionStartSeq = 0;
 
 const currentPet = computed(() => findPetById(playerState.currentPetId));
 const assets = computed(() => playerState.currentAssets);
@@ -31,30 +42,22 @@ const isPlaying = computed(() => playerState.playbackState === "playing");
 const isSwitching = computed(() => playerState.playbackState === "switching");
 const isDriving = computed(() => systemState.drivingMode === "driving");
 
+const idleVideoPlaying = computed(() => {
+  if (!assets.value?.idle_video) return false;
+  if (playerState.selectorOpen) return false;
+  if (playerState.playbackState === "switching") return false;
+  // 等新触发的动作视频渲染出首帧后，再暂停待机视频，避免切换瞬间露底。
+  if (playerState.playbackState === "playing" && readyActionSlot.value !== null) {
+    return false;
+  }
+  return true;
+});
+
 function setVideoRef(slot: HotzoneSlot, el: unknown) {
   if (el instanceof HTMLVideoElement) {
     videoRefs.value[slot] = el;
   } else {
     delete videoRefs.value[slot];
-  }
-}
-
-function playIdleVideo() {
-  const el = idleVideoRef.value;
-  if (!el || !assets.value?.idle_video) return;
-  if (playerState.playbackState !== "idle" || playerState.selectorOpen) return;
-  const playPromise = el.play();
-  if (playPromise && typeof playPromise.catch === "function") {
-    playPromise.catch(() => undefined);
-  }
-}
-
-function pauseIdleVideo(resetTime = false) {
-  const el = idleVideoRef.value;
-  if (!el) return;
-  el.pause();
-  if (resetTime) {
-    el.currentTime = 0;
   }
 }
 
@@ -65,14 +68,114 @@ function clearActionTimer() {
   }
 }
 
-function stopAllVideos() {
-  clearActionTimer();
-  for (const slot of ["left", "center", "right"] as const) {
-    const el = videoRefs.value[slot];
-    if (el) {
-      el.pause();
+function clearIdleResumeFallback() {
+  if (idleResumeFallbackTimer !== null) {
+    window.clearTimeout(idleResumeFallbackTimer);
+    idleResumeFallbackTimer = null;
+  }
+}
+
+function resetSlotVideo(slot: HotzoneSlot) {
+  const el = videoRefs.value[slot];
+  if (!el) return;
+  el.pause();
+  if (el.currentTime > 0.01) {
+    try {
       el.currentTime = 0;
+    } catch {
+      // noop
     }
+  }
+}
+
+function stopAllVideos() {
+  actionStartSeq += 1;
+  clearActionTimer();
+  clearIdleResumeFallback();
+  readyActionSlot.value = null;
+  fadingActionSlot.value = null;
+  for (const slot of ["left", "center", "right"] as const) {
+    resetSlotVideo(slot);
+  }
+}
+
+function syncActionSources() {
+  const current = assets.value;
+  if (!current) {
+    actionSrcs.value = { left: "", center: "", right: "" };
+    return;
+  }
+  preloadAssetVideosBackground(current);
+  for (const slot of ["left", "center", "right"] as const) {
+    const rawUrl = current.actions[slot].url;
+    actionSrcs.value[slot] = getPlayableVideoUrl(rawUrl);
+    if (!actionSrcs.value[slot].startsWith("blob:")) {
+      void preloadVideoBlob(rawUrl)
+        .then((blobUrl) => {
+          if (assets.value?.version_id !== current.version_id) return;
+          if (!blobUrl.startsWith("blob:")) return;
+          // 仅在当前槽位未在播放时升级为内存 Blob 地址，避免打断正在播放的动作
+          if (playerState.activeAction !== slot && fadingActionSlot.value !== slot) {
+            actionSrcs.value[slot] = blobUrl;
+          }
+        })
+        .catch(() => undefined);
+    }
+  }
+}
+
+function waitForVideoFirstFrame(videoEl: HTMLVideoElement, timeoutMs = 120): Promise<void> {
+  return new Promise((resolve) => {
+    const v = videoEl as VideoWithRVFC;
+    let settled = false;
+    let rvfcId: number | null = null;
+    let rafId: number | null = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      v.removeEventListener("playing", onPlaying);
+      if (rvfcId !== null && typeof v.cancelVideoFrameCallback === "function") {
+        v.cancelVideoFrameCallback(rvfcId);
+      }
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      resolve();
+    };
+    const onPlaying = () => {
+      rafId = window.requestAnimationFrame(finish);
+    };
+    const timer = window.setTimeout(finish, timeoutMs);
+
+    if (typeof v.requestVideoFrameCallback === "function") {
+      rvfcId = v.requestVideoFrameCallback(finish);
+    } else if (!v.paused && v.readyState >= 2) {
+      rafId = window.requestAnimationFrame(finish);
+    } else {
+      v.addEventListener("playing", onPlaying, { once: true });
+    }
+  });
+}
+
+function finalizeFadingAction() {
+  clearIdleResumeFallback();
+  const prevSlot = fadingActionSlot.value;
+  if (!prevSlot) return;
+  fadingActionSlot.value = null;
+  resetSlotVideo(prevSlot);
+  const rawUrl = assets.value?.actions[prevSlot]?.url;
+  if (rawUrl) {
+    const cached = getPlayableVideoUrl(rawUrl);
+    if (cached.startsWith("blob:")) {
+      actionSrcs.value[prevSlot] = cached;
+    }
+  }
+}
+
+function handleIdleFirstFrame() {
+  if (fadingActionSlot.value !== null) {
+    finalizeFadingAction();
   }
 }
 
@@ -80,10 +183,12 @@ watch(
   () => playerState.playbackState,
   (state) => {
     if (state === "idle") {
-      stopAllVideos();
-      void nextTick(() => playIdleVideo());
+      // 如果不是正常播完自然过渡（例如安全提醒打断），立刻停止所有动作视频
+      if (fadingActionSlot.value === null) {
+        stopAllVideos();
+      }
     } else if (state === "switching") {
-      pauseIdleVideo(true);
+      stopAllVideos();
     }
   },
 );
@@ -92,28 +197,17 @@ watch(
   [() => assets.value?.version_id, () => assets.value?.idle_video?.url],
   () => {
     stopAllVideos();
-    void nextTick(() => playIdleVideo());
+    syncActionSources();
   },
-);
-
-watch(
-  () => playerState.selectorOpen,
-  (open) => {
-    if (open) {
-      pauseIdleVideo(false);
-    } else if (playerState.playbackState === "idle") {
-      void nextTick(() => playIdleVideo());
-    }
-  },
+  { immediate: true },
 );
 
 onMounted(() => {
-  void nextTick(() => playIdleVideo());
+  syncActionSources();
 });
 
 onBeforeUnmount(() => {
   stopAllVideos();
-  pauseIdleVideo(true);
 });
 
 function handleCanvasClick(event: MouseEvent) {
@@ -126,44 +220,65 @@ function handleCanvasClick(event: MouseEvent) {
   const accepted = triggerHotzone(hit.slot, hit.ratioX);
   if (!accepted) return;
 
+  finalizeFadingAction();
   const videoEl = videoRefs.value[hit.slot];
   if (!videoEl) {
     completeActionPlayback();
     return;
   }
+
+  const seq = ++actionStartSeq;
   clearActionTimer();
-  videoEl.currentTime = 0;
+  readyActionSlot.value = null;
+  if (videoEl.currentTime > 0.01) {
+    try {
+      videoEl.currentTime = 0;
+    } catch {
+      // noop
+    }
+  }
   const playPromise = videoEl.play();
   if (playPromise && typeof playPromise.then === "function") {
     playPromise
+      .then(() => waitForVideoFirstFrame(videoEl, 120))
       .then(() => {
-        if (playerState.activeAction === hit.slot) {
-          pauseIdleVideo(true);
+        if (seq === actionStartSeq && playerState.playbackState === "playing" && playerState.activeAction === hit.slot) {
+          readyActionSlot.value = hit.slot;
         }
       })
       .catch(() => {
-        completeActionPlayback();
+        if (seq === actionStartSeq) {
+          completeActionPlayback();
+        }
       });
   } else {
-    pauseIdleVideo(true);
+    readyActionSlot.value = hit.slot;
   }
+
   const durationSec = assets.value?.actions[hit.slot]?.duration ?? 4.5;
   const safetyMs = Math.max(6500, Math.ceil((durationSec + 2.5) * 1000));
   actionSafetyTimer = window.setTimeout(() => {
+    finalizeFadingAction();
     completeActionPlayback();
   }, safetyMs);
 }
 
 function handleVideoEnded(slot: HotzoneSlot) {
-  if (playerState.activeAction === slot) {
-    clearActionTimer();
-    const videoEl = videoRefs.value[slot];
-    if (videoEl) {
-      videoEl.pause();
-      videoEl.currentTime = 0;
-    }
+  if (playerState.activeAction !== slot) return;
+  clearActionTimer();
+  readyActionSlot.value = null;
+
+  if (assets.value?.idle_video) {
+    // 保留动作末帧短暂遮罩，待机循环唤醒首帧绘制完成后立即无缝退场
+    fadingActionSlot.value = slot;
     completeActionPlayback();
-    void nextTick(() => playIdleVideo());
+    clearIdleResumeFallback();
+    idleResumeFallbackTimer = window.setTimeout(() => {
+      finalizeFadingAction();
+    }, 180);
+  } else {
+    resetSlotVideo(slot);
+    completeActionPlayback();
   }
 }
 
@@ -215,28 +330,28 @@ function handleExitWallpaper() {
           data-testid="wallpaper-idle-image"
         />
 
-        <video
+        <SeamlessLoopVideo
           v-if="assets.idle_video"
           :key="`${assets.version_id}-idle-video`"
-          ref="idleVideoRef"
           :src="assets.idle_video.url"
           :poster="assets.idle_image.url"
+          :playing="idleVideoPlaying"
           class="stage-media stage-idle-video"
-          autoplay
-          loop
-          muted
-          playsinline
-          preload="auto"
-          data-testid="wallpaper-idle-video"
+          test-id="wallpaper-idle-video"
+          @first-frame="handleIdleFirstFrame"
         />
 
         <video
           v-for="slot in (['left', 'center', 'right'] as const)"
           :key="`${assets.version_id}-${slot}`"
           :ref="(el) => setVideoRef(slot, el)"
-          :src="assets.actions[slot].url"
+          :src="actionSrcs[slot]"
           class="stage-media stage-video"
-          :class="{ active: isPlaying && playerState.activeAction === slot }"
+          :class="{
+            active:
+              (isPlaying && playerState.activeAction === slot && readyActionSlot === slot) ||
+              fadingActionSlot === slot,
+          }"
           muted
           playsinline
           preload="auto"

@@ -345,8 +345,8 @@ def _draw_running_dog(
     )
 
 
-def _encode_frames_ffmpeg(frames: list[Image.Image], output_path: Path) -> None:
-    """将 RGB 帧序列通过管道编码为 1920x1080 24fps H.264 MP4。"""
+def _encode_frames_ffmpeg(frames: list[Image.Image], output_path: Path, crf: int = 20) -> None:
+    """将 RGB 帧序列通过管道编码为无音轨、零 B 帧、前置 moov 的 1920x1080 24fps H.264 MP4。"""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_suffix(".tmp.mp4")
     cmd = [
@@ -367,7 +367,15 @@ def _encode_frames_ffmpeg(frames: list[Image.Image], output_path: Path) -> None:
         "-preset",
         "medium",
         "-crf",
-        "23",
+        str(crf),
+        "-bf",
+        "0",
+        "-g",
+        str(FPS),
+        "-keyint_min",
+        str(FPS),
+        "-sc_threshold",
+        "0",
         "-pix_fmt",
         "yuv420p",
         "-movflags",
@@ -472,7 +480,7 @@ def build_transitions(force_synthetic: bool = False) -> dict[str, dict]:
 
 
 def _normalize_video_1080p(src: Path, dst: Path) -> None:
-    """将源视频统一转为 1920x1080 24fps H.264 无声 MP4。"""
+    """将源视频统一转为无音轨、零 B 帧、前置 moov 的 1920x1080 24fps H.264 MP4。"""
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".tmp.mp4")
     cmd = [
@@ -487,7 +495,15 @@ def _normalize_video_1080p(src: Path, dst: Path) -> None:
         "-preset",
         "medium",
         "-crf",
-        "20",
+        "19",
+        "-bf",
+        "0",
+        "-g",
+        str(FPS),
+        "-keyint_min",
+        str(FPS),
+        "-sc_threshold",
+        "0",
         "-pix_fmt",
         "yuv420p",
         "-movflags",
@@ -495,8 +511,98 @@ def _normalize_video_1080p(src: Path, dst: Path) -> None:
         "-an",
         str(tmp),
     ]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    tmp.replace(dst)
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        tmp.replace(dst)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _smooth_loop_and_optimize_video(path: Path, blend_tail_frames: int = 0) -> None:
+    """就地优化已有 MP4：剥离音轨、禁用 B 帧、固定关键帧并前置 moov，可选首尾平滑过渡。"""
+    if blend_tail_frames <= 0:
+        _normalize_video_1080p(path, path)
+        return
+
+    raw = subprocess.check_output(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(path),
+            "-vf",
+            "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=24",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-",
+        ]
+    )
+    frame_size = WIDTH * HEIGHT * 3
+    total = len(raw) // frame_size
+    if total <= blend_tail_frames + 1:
+        _normalize_video_1080p(path, path)
+        return
+
+    frames = [
+        Image.frombytes("RGB", (WIDTH, HEIGHT), raw[i * frame_size : (i + 1) * frame_size])
+        for i in range(total)
+    ]
+    first = frames[0]
+    tail_start = total - blend_tail_frames
+    for idx in range(blend_tail_frames):
+        alpha = (idx + 1) / (blend_tail_frames + 1)
+        frames[tail_start + idx] = Image.blend(frames[tail_start + idx], first, alpha)
+
+    tmp_path = path.with_suffix(".tmp.mp4")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-s",
+        f"{WIDTH}x{HEIGHT}",
+        "-r",
+        str(FPS),
+        "-i",
+        "-",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "18",
+        "-bf",
+        "0",
+        "-g",
+        str(FPS),
+        "-keyint_min",
+        str(FPS),
+        "-sc_threshold",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-an",
+        str(tmp_path),
+    ]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    assert proc.stdin is not None
+    try:
+        for frame in frames:
+            proc.stdin.write(frame.tobytes())
+        proc.stdin.close()
+        stderr = proc.stderr.read().decode("utf-8", errors="ignore") if proc.stderr else ""
+        if proc.wait() != 0:
+            raise RuntimeError(f"ffmpeg 平滑循环编码失败: {stderr}")
+        tmp_path.replace(path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _build_fallback_action_video(species: str, direction: str, dst: Path) -> None:
@@ -646,11 +752,38 @@ def build_samples(force_rebuild: bool = False, existing_manifest: dict | None = 
     return samples_info
 
 
+def optimize_all_existing_videos() -> None:
+    """重编码目录内全部 MP4（含过场、默认壁纸与猫狗样例），并对待机循环做首尾平滑。"""
+    idle_vid = DEFAULT_WALLPAPER_DIR / "idle.mp4"
+    if idle_vid.is_file():
+        _smooth_loop_and_optimize_video(idle_vid, blend_tail_frames=8)
+
+    for slot in ("left", "center", "right"):
+        p = DEFAULT_WALLPAPER_DIR / f"{slot}.mp4"
+        if p.is_file():
+            _smooth_loop_and_optimize_video(p, blend_tail_frames=0)
+
+    for species in ("cat", "dog"):
+        for slot in ("left", "center", "right"):
+            p = ASSETS_DIR / "samples" / species / f"{slot}.mp4"
+            if p.is_file():
+                _smooth_loop_and_optimize_video(p, blend_tail_frames=0)
+
+    for name in ("intro-3s.mp4", "chase-loop-7s.mp4"):
+        p = ASSETS_DIR / "transitions" / name
+        if p.is_file():
+            _smooth_loop_and_optimize_video(p, blend_tail_frames=0)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="探测或重建网页 Demo 公共素材并更新 manifest.json")
     parser.add_argument("--rebuild-transitions", action="store_true", help="重新生成合成过场视频并覆盖现有文件")
     parser.add_argument("--rebuild-samples", action="store_true", help="强制重建猫狗样例视频与图片")
+    parser.add_argument("--optimize-videos", action="store_true", help="优化全部现有 MP4 的关键帧/B帧/音轨与循环连续性")
     args = parser.parse_args()
+
+    if args.optimize_videos:
+        optimize_all_existing_videos()
 
     manifest_path = ASSETS_DIR / "manifest.json"
     existing_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}

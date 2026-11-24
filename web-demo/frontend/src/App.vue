@@ -7,6 +7,7 @@ import {
   fetchGenerations,
   fetchPets,
 } from "@/lib/api";
+import { preloadAssetVideosBackground, preloadTransitionVideos } from "@/lib/preload";
 import {
   startWaitingBatch,
   stopAllPolling,
@@ -40,6 +41,7 @@ async function bootstrap() {
       fetchGenerations(),
     ]);
     systemState.config = config;
+    preloadTransitionVideos([config.transitions?.intro?.url, config.transitions?.loop?.url]);
     setDefaultWallpaper(config.default_wallpaper ?? null);
     setPets(pets);
     setSavedWallpaper(currentWallpaper);
@@ -64,6 +66,7 @@ async function bootstrap() {
         currentWallpaper.version_id,
         currentWallpaper.assets,
       );
+      preloadAssetVideosBackground(currentWallpaper.assets);
       if (hashRoute === "home") {
         setRoute("home");
       } else if (hashRoute === "generating" && activeJobs.length > 0) {
@@ -78,6 +81,7 @@ async function bootstrap() {
     } else if (config.default_wallpaper) {
       const defWp = config.default_wallpaper;
       setDisplayedWallpaper(defWp.pet_id, defWp.version_id, defWp.assets);
+      preloadAssetVideosBackground(defWp.assets);
       if (hashRoute === "welcome") {
         setRoute("welcome");
       } else if (hashRoute === "home") {
@@ -89,6 +93,7 @@ async function bootstrap() {
       const readyPet = getFirstReadyPet();
       if (readyPet && readyPet.active_assets && readyPet.active_version_id) {
         setDisplayedWallpaper(readyPet.id, readyPet.active_version_id, readyPet.active_assets);
+        preloadAssetVideosBackground(readyPet.active_assets);
         setRoute(hashRoute === "wallpaper" ? "wallpaper" : "home");
       } else {
         setRoute("welcome");

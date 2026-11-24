@@ -1,5 +1,9 @@
 import type { AssetVersionManifest } from "@/types";
 
+const MAX_VIDEO_BLOBS = 32;
+const videoBlobCache = new Map<string, string>();
+const pendingVideoBlobs = new Map<string, Promise<string>>();
+
 export function preloadImage(url: string, timeoutMs = 8000): Promise<void> {
   if (typeof Image === "undefined") {
     return Promise.resolve();
@@ -66,6 +70,130 @@ export function preloadVideoMetadata(url: string, timeoutMs = 8000): Promise<voi
   });
 }
 
+/** 获取已缓存的本地 Blob 播放地址；尚未缓存时回退原 URL。 */
+export function getPlayableVideoUrl(url: string): string {
+  return videoBlobCache.get(url) ?? url;
+}
+
+/** 清空内存中的视频 Blob 缓存（主要用于测试隔离）。 */
+export function clearVideoBlobCache(): void {
+  for (const blobUrl of videoBlobCache.values()) {
+    if (typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(blobUrl);
+    }
+  }
+  videoBlobCache.clear();
+  pendingVideoBlobs.clear();
+}
+
+function rememberVideoBlob(url: string, objectUrl: string): void {
+  if (videoBlobCache.has(url)) {
+    const prev = videoBlobCache.get(url);
+    videoBlobCache.delete(url);
+    if (prev && prev !== objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(prev);
+    }
+  }
+  videoBlobCache.set(url, objectUrl);
+  while (videoBlobCache.size > MAX_VIDEO_BLOBS) {
+    const oldestKey = videoBlobCache.keys().next().value;
+    if (!oldestKey) break;
+    const oldestVal = videoBlobCache.get(oldestKey);
+    videoBlobCache.delete(oldestKey);
+    if (oldestVal && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(oldestVal);
+    }
+  }
+}
+
+/**
+ * 完整拉取视频到内存 Blob URL 并校验可解码元数据，消除循环回跳和重播时的网络/磁盘寻道卡顿。
+ */
+export function preloadVideoBlob(url: string, timeoutMs = 20000): Promise<string> {
+  if (!url) {
+    return Promise.resolve(url);
+  }
+  const cached = videoBlobCache.get(url);
+  if (cached) {
+    // 刷新 LRU 顺序
+    videoBlobCache.delete(url);
+    videoBlobCache.set(url, cached);
+    return Promise.resolve(cached);
+  }
+  const pending = pendingVideoBlobs.get(url);
+  if (pending) {
+    return pending;
+  }
+  if (
+    typeof fetch !== "function" ||
+    typeof URL === "undefined" ||
+    typeof URL.createObjectURL !== "function"
+  ) {
+    return preloadVideoMetadata(url, timeoutMs).then(() => url);
+  }
+
+  const task = (async () => {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer =
+      typeof window !== "undefined"
+        ? window.setTimeout(() => controller?.abort(), timeoutMs)
+        : null;
+    try {
+      const resp = await fetch(url, {
+        credentials: "same-origin",
+        signal: controller?.signal,
+      });
+      if (!resp.ok) {
+        throw new Error(`互动视频加载失败（HTTP ${resp.status}）`);
+      }
+      const blob = await resp.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error("互动视频内容为空");
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        await preloadVideoMetadata(objectUrl, timeoutMs);
+      } catch (err) {
+        URL.revokeObjectURL(objectUrl);
+        throw err;
+      }
+      rememberVideoBlob(url, objectUrl);
+      return objectUrl;
+    } finally {
+      if (timer !== null && typeof window !== "undefined") {
+        window.clearTimeout(timer);
+      }
+      pendingVideoBlobs.delete(url);
+    }
+  })();
+
+  pendingVideoBlobs.set(url, task);
+  return task;
+}
+
+/** 在后台静默预加载一套壁纸的全部视频（首屏直接展示默认/历史壁纸时使用）。 */
+export function preloadAssetVideosBackground(assets: AssetVersionManifest | null | undefined): void {
+  if (!assets) return;
+  const urls = [
+    assets.idle_video?.url,
+    assets.actions.left.url,
+    assets.actions.center.url,
+    assets.actions.right.url,
+  ].filter((u): u is string => Boolean(u));
+  for (const url of urls) {
+    void preloadVideoBlob(url).catch(() => undefined);
+  }
+}
+
+/** 在后台静默预加载过场先导与追逐循环视频。 */
+export function preloadTransitionVideos(urls: Array<string | null | undefined>): void {
+  for (const url of urls) {
+    if (url) {
+      void preloadVideoBlob(url).catch(() => undefined);
+    }
+  }
+}
+
 export async function verifyAndPreloadAssets(
   assets: AssetVersionManifest,
   options?: { simulateFailure?: boolean },
@@ -74,13 +202,13 @@ export async function verifyAndPreloadAssets(
     throw new Error("模拟切换壁纸资源加载失败");
   }
   await preloadImage(assets.idle_image.url);
-  const videoPreloads = [
-    preloadVideoMetadata(assets.actions.left.url),
-    preloadVideoMetadata(assets.actions.center.url),
-    preloadVideoMetadata(assets.actions.right.url),
+  const videoPreloads: Array<Promise<unknown>> = [
+    preloadVideoBlob(assets.actions.left.url),
+    preloadVideoBlob(assets.actions.center.url),
+    preloadVideoBlob(assets.actions.right.url),
   ];
   if (assets.idle_video?.url) {
-    videoPreloads.push(preloadVideoMetadata(assets.idle_video.url));
+    videoPreloads.push(preloadVideoBlob(assets.idle_video.url));
   }
   await Promise.all(videoPreloads);
 }

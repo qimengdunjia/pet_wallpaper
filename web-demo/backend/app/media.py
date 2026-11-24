@@ -134,12 +134,73 @@ def inspect_video(path: Path) -> dict:
     }
 
 
+def normalize_video_for_playback(path: Path) -> None:
+    """规范化生成视频以便无缝播放：剥离音轨、消除 B 帧并确保 moov 前置。"""
+    if not path.is_file():
+        return
+    probe_cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_type,has_b_frames",
+        "-of",
+        "json",
+        str(path),
+    ]
+    try:
+        res = subprocess.run(probe_cmd, check=True, capture_output=True, timeout=15)
+        streams = json.loads(res.stdout).get("streams", [])
+    except (subprocess.SubprocessError, ValueError, KeyError):
+        return
+
+    video_streams = [s for s in streams if s.get("codec_type") == "video"]
+    has_audio = any(s.get("codec_type") != "video" for s in streams)
+    has_b_frames = any(int(s.get("has_b_frames") or 0) > 0 for s in video_streams)
+    if video_streams and not has_audio and not has_b_frames:
+        return
+
+    tmp = path.with_suffix(".norm.mp4")
+    if video_streams and not has_b_frames:
+        encode_args = ["-c:v", "copy"]
+    else:
+        encode_args = [
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "19",
+            "-bf",
+            "0",
+            "-g",
+            "24",
+            "-keyint_min",
+            "24",
+            "-sc_threshold",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+        ]
+
+    cmd = ["ffmpeg", "-y", "-i", str(path), *encode_args, "-movflags", "+faststart", "-an", str(tmp)]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
+        tmp.replace(path)
+    except (FileNotFoundError, subprocess.SubprocessError):
+        pass
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def validate_asset_bundle(idle_path: Path, action_paths: dict[str, Path]) -> tuple[dict, dict[str, dict]]:
-    """发布版本前完整验收待机图与左/中/右三段视频，任一残缺直接拦截。"""
-    if set(action_paths.keys()) != set(REQUIRED_ACTION_SLOTS):
+    """检查待机图与三段交互视频，以及供应商提供的待机视频，返回素材元数据。"""
+    slots = set(action_paths) - {"idle-video"}
+    if slots != set(REQUIRED_ACTION_SLOTS):
         raise AssetValidationError("动作视频缺少左、中或右方向")
     idle_meta = inspect_image(idle_path)
     actions_meta: dict[str, dict] = {}
-    for slot in REQUIRED_ACTION_SLOTS:
-        actions_meta[slot] = inspect_video(action_paths[slot])
+    for slot, path in action_paths.items():
+        normalize_video_for_playback(path)
+        actions_meta[slot] = inspect_video(path)
     return idle_meta, actions_meta
