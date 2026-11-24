@@ -32,7 +32,15 @@ def image_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int
 
 
 def video_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int, prefix: str) -> dict:
-    """以待机图同时作为首尾帧，按提示词、成片尺寸、种子和前缀返回 4 秒动作执行图。"""
+    """返回由模型生成全部画面帧的 4 秒视频执行图。
+
+    参数：
+        reference: 待机参考图在 ComfyUI 中的路径，用于首尾姿态条件。
+        prompt: 该段视频的动作与画面描述。
+        size: 成片的宽度和高度，单位为像素。
+        seed: 模型采样的随机种子。
+        prefix: ComfyUI 成片的文件名前缀。
+    """
     width, height = size
     frames = 4 * FPS
     model_frames = frames + (5 - frames % 17) % 17  # H3 的合法帧数为 17k+5。
@@ -64,13 +72,8 @@ def video_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int
         "preview": _node("CreateVideo", images=["decode", 0], fps=FPS),
         "resample": _node("VideoFrameSample", video=["preview", 0], num_frames=frames, strategy="uniform", seed=0),
         "components": _node("GetVideoComponents", video=["resample", 0]),
-        "body": _node("ImageFromBatch", image=["components", 0], batch_index=1, length=frames - 2),
-        "scale_body": _node("ImageScale", image=["body", 0], **scale),
-        "scale_reference": _node("ImageScale", image=["reference", 0], **scale),
-        "frames": _node("BatchImagesNode", **{
-            "images.image0": ["scale_reference", 0], "images.image1": ["scale_body", 0],
-            "images.image2": ["scale_reference", 0],
-        }),
-        "video": _node("CreateVideo", images=["frames", 0], fps=FPS),
+        # 首尾与中间帧统一使用模型解码结果，避免静态参考图带来的清晰度突变。
+        "scale_frames": _node("ImageScale", image=["components", 0], **scale),
+        "video": _node("CreateVideo", images=["scale_frames", 0], fps=FPS),
         OUTPUT_NODE: _node("SaveVideo", video=["video", 0], filename_prefix=prefix, format="mp4", **{"format.codec": "h264"}),
     }
