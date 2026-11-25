@@ -17,7 +17,6 @@ import {
   isWallpaperImmersive,
   setImmersiveMode,
   setRoute,
-  showToast,
   systemState,
 } from "@/stores/systemStore";
 import { useClock } from "@/stores/useClock";
@@ -452,11 +451,8 @@ function handleOpenSelector() {
 }
 
 function handleAddPet() {
-  if (isPlaying.value) {
-    showToast("动作播放期间暂停新增宠物，请稍候", "warning", 2200);
-    return;
-  }
   if (!guardParkedAction("新增宠物")) return;
+  completeActionPlayback();
   systemState.onboardingReturnRoute = "wallpaper";
   systemState.onboardingSpeciesMode = null;
   setRoute("onboarding-species");
@@ -594,7 +590,7 @@ function handleExitWallpaper() {
         <div class="mode-left-group">
           <button
             class="btn mode-glass-btn"
-            :disabled="isPlaying || isSwitching || isDriving"
+            :disabled="isSwitching || isDriving"
             data-testid="switch-pet-btn"
             @click="handleOpenSelector"
           >
@@ -602,7 +598,7 @@ function handleExitWallpaper() {
           </button>
           <button
             class="btn mode-glass-btn"
-            :disabled="isPlaying || isSwitching || isDriving"
+            :disabled="isSwitching || isDriving"
             data-testid="add-pet-btn"
             @click="handleAddPet"
           >

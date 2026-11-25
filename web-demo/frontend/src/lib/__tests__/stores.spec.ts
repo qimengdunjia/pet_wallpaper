@@ -341,6 +341,22 @@ describe("frontend stores state machine & decoupling", () => {
     expect(playerState.currentPetId).toBe("dog-old");
   });
 
+  it("opens the pet selector during playback and clears the current interaction", async () => {
+    const cat = makePet("cat-1", "cat", true);
+    setPets([cat]);
+    await activatePetWallpaper(cat, {
+      persist: false,
+      deps: { verifyAssets: async () => undefined },
+    });
+
+    expect(triggerHotzone("left", 0.17)).toBe(true);
+    expect(openPetSelector()).toBe(true);
+    expect(playerState.selectorOpen).toBe(true);
+    expect(playerState.playbackState).toBe("idle");
+    expect(playerState.activeAction).toBeNull();
+    expect(triggerHotzone("right", 0.83)).toBe(false);
+  });
+
   it("enforces driving restrictions, ignores double clicks while playing, and interrupts on safety alert", async () => {
     const cat = makePet("cat-1", "cat", true);
     setPets([cat]);
@@ -349,11 +365,10 @@ describe("frontend stores state machine & decoupling", () => {
       deps: { verifyAssets: async () => undefined },
     });
 
-    // 动作播放中忽略连点且锁定宠物选择入口
+    // 动作播放中忽略其他热区的点击。
     expect(triggerHotzone("left", 0.17)).toBe(true);
     expect(playerState.playbackState).toBe("playing");
     expect(triggerHotzone("right", 0.83)).toBe(false);
-    expect(openPetSelector()).toBe(false);
 
     // 系统安全驾驶提醒可立即打断动作播放
     triggerSafetyAlert();

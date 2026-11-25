@@ -143,11 +143,9 @@ export function interruptPlayback(notice?: string) {
   }
 }
 
+/** 结束当前互动并打开宠物选择面板，返回是否已打开。 */
 export function openPetSelector() {
-  if (playerState.playbackState === "playing") {
-    showToast("动作播放期间暂停切换宠物，请稍候", "warning", 2400);
-    return false;
-  }
+  completeActionPlayback();
   playerState.confirmingPetId = null;
   playerState.editingPetId = null;
   playerState.selectorOpen = true;
