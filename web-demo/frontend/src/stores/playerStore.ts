@@ -100,6 +100,7 @@ export async function activatePetWallpaper(
   return isCurrent() ? { ok: true } : canceled;
 }
 
+/** 接受热区 slot 的互动，记录横向比例 ratioX，返回此次请求是否生效。 */
 export function triggerHotzone(slot: HotzoneSlot, ratioX: number): boolean {
   if (systemState.alertVisible) {
     return false;
@@ -111,7 +112,7 @@ export function triggerHotzone(slot: HotzoneSlot, ratioX: number): boolean {
   if (playerState.selectorOpen || playerState.confirmingPetId || playerState.editingPetId) {
     return false;
   }
-  if (playerState.playbackState !== "idle") {
+  if (playerState.playbackState === "switching") {
     return false;
   }
   if (!playerState.currentAssets) {

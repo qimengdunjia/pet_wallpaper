@@ -27,6 +27,7 @@ import {
   triggerHotzone,
 } from "@/stores/playerStore";
 import {
+  dismissSafetyAlert,
   guardParkedAction,
   resetSystemState,
   setDrivingMode,
@@ -357,7 +358,7 @@ describe("frontend stores state machine & decoupling", () => {
     expect(triggerHotzone("right", 0.83)).toBe(false);
   });
 
-  it("enforces driving restrictions, ignores double clicks while playing, and interrupts on safety alert", async () => {
+  it("accepts new interactions during playback and enforces the safety and driving restrictions", async () => {
     const cat = makePet("cat-1", "cat", true);
     setPets([cat]);
     await activatePetWallpaper(cat, {
@@ -365,18 +366,23 @@ describe("frontend stores state machine & decoupling", () => {
       deps: { verifyAssets: async () => undefined },
     });
 
-    // 动作播放中忽略其他热区的点击。
+    // 播放时仍接受其他热区或同一热区的互动。
     expect(triggerHotzone("left", 0.17)).toBe(true);
     expect(playerState.playbackState).toBe("playing");
-    expect(triggerHotzone("right", 0.83)).toBe(false);
+    expect(triggerHotzone("right", 0.83)).toBe(true);
+    expect(playerState.activeAction).toBe("right");
+    expect(triggerHotzone("right", 0.9)).toBe(true);
+    expect(playerState.lastTriggered?.ratioX).toBe(0.9);
 
     // 系统安全驾驶提醒可立即打断动作播放
     triggerSafetyAlert();
     interruptPlayback("安全提醒打断");
     expect(playerState.playbackState).toBe("idle");
     expect(playerState.activeAction).toBeNull();
+    expect(triggerHotzone("center", 0.5)).toBe(false);
 
     // 行驶中禁用点击及停车操作
+    dismissSafetyAlert();
     setDrivingMode("driving");
     expect(triggerHotzone("center", 0.5)).toBe(false);
     expect(guardParkedAction("新增宠物")).toBe(false);

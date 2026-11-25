@@ -35,8 +35,7 @@ type VideoWithRVFC = HTMLVideoElement & {
 const clockText = useClock();
 const canvasRef = ref<HTMLElement | null>(null);
 const videoRefs = ref<Partial<Record<HotzoneSlot, HTMLVideoElement>>>({});
-// 已接受互动，仍在等待当前可见的待机视频结束。
-const waitingForIdleEnd = ref(false);
+// 当前显示的互动层，直到新互动绘制出首帧才替换。
 const readyActionSlot = ref<HotzoneSlot | null>(null);
 const fadingActionSlot = ref<HotzoneSlot | null>(null);
 const actionSrcs = ref<Record<HotzoneSlot, string>>({ left: "", center: "", right: "" });
@@ -128,7 +127,7 @@ const idleVideoPlaying = computed(() => {
   if (!assets.value?.idle_video) return false;
   if (playerState.selectorOpen) return false;
   if (playerState.playbackState === "switching") return false;
-  // 互动首帧就绪前，待机层继续显示当前轮或保留末帧。
+  // 互动首帧就绪前继续显示待机视频，避免切换瞬间露底。
   if (playerState.playbackState === "playing" && readyActionSlot.value !== null) {
     return false;
   }
@@ -174,7 +173,6 @@ function stopAllVideos() {
   actionStartSeq += 1;
   clearActionTimer();
   clearIdleResumeFallback();
-  waitingForIdleEnd.value = false;
   readyActionSlot.value = null;
   fadingActionSlot.value = null;
   for (const slot of ["left", "center", "right"] as const) {
@@ -195,7 +193,8 @@ async function syncActionSources(retry = false) {
     if (!retry) actionSrcs.value[slot] = getPlayableVideoUrl(url);
     const src = await preloadVideoBlob(url);
     if (!src.startsWith("blob:")) throw new Error("浏览器无法缓存互动视频");
-    if (attempt === cacheAttempt && playerState.activeAction !== slot && fadingActionSlot.value !== slot) {
+    if (attempt === cacheAttempt && playerState.activeAction !== slot
+      && readyActionSlot.value !== slot && fadingActionSlot.value !== slot) {
       actionSrcs.value[slot] = src;
     }
   };
@@ -281,7 +280,6 @@ watch(
   () => playerState.playbackState,
   (state) => {
     if (state === "idle") {
-      waitingForIdleEnd.value = false;
       // 如果不是正常播完自然过渡（例如安全提醒打断），立刻停止所有动作视频
       if (fadingActionSlot.value === null) {
         stopAllVideos();
@@ -331,7 +329,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointermove", handleWindowPointerMove);
   clearExitRevealTimer();
   cacheAttempt++;
-  if (waitingForIdleEnd.value) completeActionPlayback();
+  completeActionPlayback();
   stopAllVideos();
 });
 
@@ -340,34 +338,19 @@ function handleCanvasClick(event: MouseEvent) {
   if (!el) return;
   const rect = el.getBoundingClientRect();
   const hit = resolveHotzone(event.clientX, event.clientY, rect);
-  if (hit) requestAction(hit.slot, hit.ratioX);
+  if (hit) playAction(hit.slot, hit.ratioX);
 }
 
-/** 请求播放 slot 对应的互动视频，用 ratioX 记录触发位置；播放器忙时忽略。 */
-function requestAction(slot: HotzoneSlot, ratioX: number) {
+/** 立即从头播放 slot 对应的互动视频，用 ratioX 记录触发位置。 */
+function playAction(slot: HotzoneSlot, ratioX: number) {
+  const previousSlot = playerState.activeAction;
   if (!triggerHotzone(slot, ratioX)) return;
-  if (idleVideoPlaying.value && idleSrc.value) {
-    waitingForIdleEnd.value = true;
-  } else {
-    playAction(slot);
-  }
-}
-
-/** 待机视频结束或不可播放时，处理仍有效的互动请求。 */
-function handleIdleRoundEnd() {
-  const slot = playerState.activeAction;
-  if (!waitingForIdleEnd.value || !isPlaying.value || !slot) return;
-  waitingForIdleEnd.value = false;
-  if (isDriving.value || systemState.alertVisible) {
-    completeActionPlayback();
-    return;
-  }
-  playAction(slot);
-}
-
-/** 从头播放 slot 对应的互动视频，首帧就绪后覆盖待机层。 */
-function playAction(slot: HotzoneSlot) {
+  const seq = ++actionStartSeq;
+  clearActionTimer();
   finalizeFadingAction();
+  if (previousSlot && previousSlot !== slot) {
+    videoRefs.value[previousSlot]?.pause();
+  }
   const videoEl = videoRefs.value[slot];
   if (!videoEl) {
     completeActionPlayback();
@@ -377,14 +360,11 @@ function playAction(slot: HotzoneSlot) {
   // 当前段播放期间才下载完成的缓存，在下次启动这一段时再切换。
   const url = assets.value?.actions[slot].url;
   const cached = url && getPlayableVideoUrl(url);
-  if (cached?.startsWith("blob:") && videoEl.src !== cached) {
+  if (previousSlot !== slot && cached?.startsWith("blob:") && videoEl.src !== cached) {
     actionSrcs.value[slot] = cached;
     videoEl.src = cached;
   }
-  const seq = ++actionStartSeq;
-  clearActionTimer();
-  readyActionSlot.value = null;
-  if (videoEl.currentTime > 0.01) {
+  if (videoEl.currentTime > 0) {
     try {
       videoEl.currentTime = 0;
     } catch {
@@ -412,6 +392,7 @@ function playAction(slot: HotzoneSlot) {
   const durationSec = assets.value?.actions[slot]?.duration ?? 4.5;
   const safetyMs = Math.max(6500, Math.ceil((durationSec + 2.5) * 1000));
   actionSafetyTimer = window.setTimeout(() => {
+    if (seq !== actionStartSeq) return;
     finalizeFadingAction();
     completeActionPlayback();
   }, safetyMs);
@@ -419,15 +400,17 @@ function playAction(slot: HotzoneSlot) {
 
 /** 将设备手势映射到对应热区的中点；弹窗或抽屉打开时忽略输入。 */
 function handleSeatKey(slot: HotzoneSlot) {
-  if (!systemState.drawerOpen) requestAction(slot, { left: 0.17, center: 0.5, right: 0.83 }[slot]);
+  if (!systemState.drawerOpen) playAction(slot, { left: 0.17, center: 0.5, right: 0.83 }[slot]);
 }
 
 function handleVideoEnded(slot: HotzoneSlot) {
-  if (waitingForIdleEnd.value || playerState.activeAction !== slot) return;
+  // 同一热区重新播放后，忽略上一轮已排队但尚未处理的结束事件。
+  if (playerState.activeAction !== slot || !videoRefs.value[slot]?.ended) return;
   clearActionTimer();
+  const wasVisible = readyActionSlot.value === slot;
   readyActionSlot.value = null;
 
-  if (assets.value?.idle_video) {
+  if (assets.value?.idle_video && wasVisible) {
     // 保留动作末帧短暂遮罩，待机循环唤醒首帧绘制完成后立即无缝退场
     fadingActionSlot.value = slot;
     completeActionPlayback();
@@ -515,11 +498,9 @@ function handleExitWallpaper() {
           :src="idleSrc"
           :poster="assets.idle_image.url"
           :playing="idleVideoPlaying"
-          :hold-at-end="isPlaying"
           class="stage-media stage-idle-video"
           test-id="wallpaper-idle-video"
           @first-frame="handleIdleFirstFrame"
-          @round-end="handleIdleRoundEnd"
         />
 
         <video
@@ -528,11 +509,7 @@ function handleExitWallpaper() {
           :ref="(el) => setVideoRef(slot, el)"
           :src="actionSrcs[slot]"
           class="stage-media stage-video"
-          :class="{
-            active:
-              (isPlaying && playerState.activeAction === slot && readyActionSlot === slot) ||
-              fadingActionSlot === slot,
-          }"
+          :class="{ active: (isPlaying && readyActionSlot === slot) || fadingActionSlot === slot }"
           muted
           playsinline
           preload="auto"
@@ -556,13 +533,13 @@ function handleExitWallpaper() {
             行驶中 · 互动锁定
           </span>
           <span
-            v-else-if="isPlaying && !waitingForIdleEnd && playerState.activeAction"
+            v-else-if="isPlaying && playerState.activeAction"
             class="state-chip success"
             data-testid="playing-status-pill"
           >
             播放中：{{ hotzoneLabel(playerState.activeAction) }}
           </span>
-          <span v-else-if="!waitingForIdleEnd" class="state-chip" data-testid="idle-status-pill">
+          <span v-else class="state-chip" data-testid="idle-status-pill">
             待机中 · 点击画面互动
           </span>
         </div>

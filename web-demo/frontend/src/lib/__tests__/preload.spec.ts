@@ -147,33 +147,4 @@ describe("video preload cache & seamless loop component", () => {
 
     wrapper.unmount();
   });
-
-  it("waits for the visible round and cancels a pending buffer handoff", async () => {
-    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
-    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
-    const wrapper = mount(SeamlessLoopVideo, { props: { src: "/idle.mp4" } });
-    const [active, standby] = wrapper.findAll("video");
-    Object.defineProperty(standby.element, "readyState", { value: 4 });
-
-    // 模拟正常循环已开始预播下一层，但当前可见层尚未结束。
-    let finishStandbyPlay!: () => void;
-    playSpy.mockImplementationOnce(() => new Promise<void>((resolve) => { finishStandbyPlay = resolve; }));
-    Object.defineProperties(active.element, {
-      duration: { value: 4 },
-      currentTime: { value: 3.96, writable: true },
-    });
-    await vi.waitFor(() => expect(playSpy).toHaveBeenCalledTimes(2));
-    await wrapper.setProps({ holdAtEnd: true });
-    finishStandbyPlay();
-
-    await standby.trigger("ended");
-    expect(wrapper.emitted("roundEnd")).toBeUndefined();
-    await active.trigger("ended");
-    expect(wrapper.emitted("roundEnd")).toHaveLength(1);
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    expect(active.classes()).toContain("active");
-    expect(playSpy).toHaveBeenCalledTimes(2);
-
-    wrapper.unmount();
-  });
 });

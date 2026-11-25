@@ -1,4 +1,4 @@
-// 文件用途：验证壁纸沉浸模式的入口、界面隐藏、实体按键保活、画布互动及多种退出方式。
+// 文件用途：验证壁纸沉浸模式的入口、界面隐藏、实体按键保活、退出方式和画布互动。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
@@ -228,6 +228,43 @@ describe("wallpaper immersive mode", () => {
     await nextTick();
     expect(isWallpaperImmersive()).toBe(false);
 
+    stage.unmount();
+  });
+
+  it("plays immediately during idle, replaces the current action, and restarts the same slot", async () => {
+    const pet = setupWallpaperPet();
+    const assets = pet.active_assets!;
+    setDisplayedWallpaper(pet.id, assets.version_id, {
+      ...assets,
+      idle_video: { ...assets.actions.center, url: "/api/test/idle-video" },
+    });
+    setRoute("wallpaper", { syncHash: false });
+    const stage = mount(WallpaperStageView);
+    const canvas = stage.get("[data-testid='wallpaper-canvas']");
+    vi.spyOn(canvas.element, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1600, 900));
+
+    const left = stage.get<HTMLVideoElement>("[data-testid='wallpaper-video-left']");
+    const right = stage.get<HTMLVideoElement>("[data-testid='wallpaper-video-right']");
+    const leftPlay = vi.spyOn(left.element, "play");
+    const leftPause = vi.spyOn(left.element, "pause");
+    const rightPlay = vi.spyOn(right.element, "play");
+
+    await canvas.trigger("click", { clientX: 200, clientY: 450 });
+    expect(leftPlay).toHaveBeenCalledTimes(1);
+    await canvas.trigger("click", { clientX: 1400, clientY: 450 });
+    expect(leftPause).toHaveBeenCalledTimes(1);
+    expect(rightPlay).toHaveBeenCalledTimes(1);
+
+    right.element.currentTime = 1.5;
+    await canvas.trigger("click", { clientX: 1400, clientY: 450 });
+    expect(right.element.currentTime).toBe(0);
+    expect(rightPlay).toHaveBeenCalledTimes(2);
+    await right.trigger("ended");
+    expect(playerState.activeAction).toBe("right");
+
+    Object.defineProperty(right.element, "ended", { value: true });
+    await right.trigger("ended");
+    expect(playerState.playbackState).toBe("idle");
     stage.unmount();
   });
 });
