@@ -13,12 +13,15 @@ const props = withDefaults(
     src: string;
     poster?: string;
     playing?: boolean;
+    // 播完当前可见视频后停在末帧，供上层切换到互动视频。
+    holdAtEnd?: boolean;
     resetOnPause?: boolean;
     testId?: string;
   }>(),
   {
     poster: undefined,
     playing: true,
+    holdAtEnd: false,
     resetOnPause: true,
     testId: undefined,
   },
@@ -27,6 +30,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   loopRound: [];
   firstFrame: [];
+  roundEnd: [];
 }>();
 
 const activeIdx = ref<0 | 1>(0);
@@ -37,6 +41,7 @@ const bufferRefs: [VideoWithRVFC | null, VideoWithRVFC | null] = [null, null];
 let disposed = false;
 let playbackSeq = 0;
 let handoffInFlight = false;
+let activePlaybackFailed = false;
 let monitorHandle: { kind: "rvfc" | "raf"; id: number; el: VideoWithRVFC } | null = null;
 let latestBlobSrc: string | null = bufferSrcs.value[0].startsWith("blob:") ? bufferSrcs.value[0] : null;
 
@@ -105,13 +110,13 @@ function resetStandbyBuffer(idx: 0 | 1) {
 
 function scheduleMonitor() {
   clearMonitor();
-  if (disposed || !props.playing || handoffInFlight) return;
+  if (disposed || !props.playing || props.holdAtEnd || handoffInFlight) return;
   const el = bufferRefs[activeIdx.value];
   if (!el) return;
 
   const checkFrame = () => {
     monitorHandle = null;
-    if (disposed || !props.playing || handoffInFlight) return;
+    if (disposed || !props.playing || props.holdAtEnd || handoffInFlight) return;
     if (bufferRefs[activeIdx.value] !== el) return;
 
     const dur = el.duration;
@@ -132,7 +137,7 @@ function scheduleMonitor() {
 }
 
 async function performHandoff() {
-  if (disposed || !props.playing || handoffInFlight) return;
+  if (disposed || !props.playing || props.holdAtEnd || handoffInFlight) return;
   handoffInFlight = true;
   clearMonitor();
   const seq = playbackSeq;
@@ -174,13 +179,10 @@ async function performHandoff() {
     // 自动播放策略受限时仍保持流程不死锁
   }
   await waitForNextPaintedFrame(nextEl, 100);
-  if (disposed || seq !== playbackSeq || !props.playing) {
-    nextEl.pause();
-    handoffInFlight = false;
-    return;
-  }
+  if (disposed || seq !== playbackSeq || !props.playing) return;
 
   activeIdx.value = nextIdx;
+  activePlaybackFailed = false;
   if (prevEl) {
     resetStandbyBuffer(prevIdx);
   }
@@ -192,6 +194,7 @@ async function performHandoff() {
 async function startPlayback() {
   const seq = ++playbackSeq;
   handoffInFlight = false;
+  activePlaybackFailed = false;
   clearMonitor();
 
   const el = bufferRefs[activeIdx.value];
@@ -205,8 +208,10 @@ async function startPlayback() {
 
   try {
     await el.play();
-  } catch {
-    // noop
+  } catch (error) {
+    if (seq === playbackSeq && !(error instanceof DOMException && error.name === "AbortError")) {
+      handleMediaError(activeIdx.value);
+    }
   }
   await waitForNextPaintedFrame(el, 120);
   if (disposed || seq !== playbackSeq || !props.playing) return;
@@ -243,10 +248,19 @@ function handleLoadedData(idx: 0 | 1) {
 }
 
 function handleEnded(idx: 0 | 1) {
-  if (disposed || !props.playing) return;
-  if (idx === activeIdx.value && !handoffInFlight) {
+  if (disposed || !props.playing || idx !== activeIdx.value) return;
+  if (props.holdAtEnd) {
+    emit("roundEnd");
+  } else {
     void performHandoff();
   }
+}
+
+/** 记录当前可见缓冲层 idx 无法播放，避免上层一直等待结束事件。 */
+function handleMediaError(idx: 0 | 1) {
+  if (disposed || !props.playing || idx !== activeIdx.value) return;
+  activePlaybackFailed = true;
+  if (props.holdAtEnd) emit("roundEnd");
 }
 
 function warmBlobSrc(url: string) {
@@ -292,6 +306,28 @@ watch(
   },
 );
 
+watch(
+  () => props.holdAtEnd,
+  (holdAtEnd) => {
+    if (!props.playing) return;
+    const el = bufferRefs[activeIdx.value];
+    if (holdAtEnd) {
+      clearMonitor();
+      // 循环交接可能已在后台预播下一轮，此时仍让当前可见轮自然结束。
+      if (handoffInFlight) {
+        playbackSeq++;
+        handoffInFlight = false;
+        resetStandbyBuffer(activeIdx.value === 0 ? 1 : 0);
+      }
+      if (el?.ended || el?.error || activePlaybackFailed) emit("roundEnd");
+    } else if (el?.ended) {
+      void performHandoff();
+    } else {
+      scheduleMonitor();
+    }
+  },
+);
+
 onMounted(() => {
   warmBlobSrc(props.src);
   if (props.playing) {
@@ -323,6 +359,7 @@ onBeforeUnmount(() => {
       :data-buffer-index="idx"
       @loadeddata="handleLoadedData(idx)"
       @ended="handleEnded(idx)"
+      @error="handleMediaError(idx)"
     />
   </div>
 </template>

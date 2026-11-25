@@ -36,6 +36,8 @@ type VideoWithRVFC = HTMLVideoElement & {
 const clockText = useClock();
 const canvasRef = ref<HTMLElement | null>(null);
 const videoRefs = ref<Partial<Record<HotzoneSlot, HTMLVideoElement>>>({});
+// 已接受互动，仍在等待当前可见的待机视频结束。
+const waitingForIdleEnd = ref(false);
 const readyActionSlot = ref<HotzoneSlot | null>(null);
 const fadingActionSlot = ref<HotzoneSlot | null>(null);
 const actionSrcs = ref<Record<HotzoneSlot, string>>({ left: "", center: "", right: "" });
@@ -127,7 +129,7 @@ const idleVideoPlaying = computed(() => {
   if (!assets.value?.idle_video) return false;
   if (playerState.selectorOpen) return false;
   if (playerState.playbackState === "switching") return false;
-  // 等新触发的动作视频渲染出首帧后，再暂停待机视频，避免切换瞬间露底。
+  // 互动首帧就绪前，待机层继续显示当前轮或保留末帧。
   if (playerState.playbackState === "playing" && readyActionSlot.value !== null) {
     return false;
   }
@@ -173,6 +175,7 @@ function stopAllVideos() {
   actionStartSeq += 1;
   clearActionTimer();
   clearIdleResumeFallback();
+  waitingForIdleEnd.value = false;
   readyActionSlot.value = null;
   fadingActionSlot.value = null;
   for (const slot of ["left", "center", "right"] as const) {
@@ -279,6 +282,7 @@ watch(
   () => playerState.playbackState,
   (state) => {
     if (state === "idle") {
+      waitingForIdleEnd.value = false;
       // 如果不是正常播完自然过渡（例如安全提醒打断），立刻停止所有动作视频
       if (fadingActionSlot.value === null) {
         stopAllVideos();
@@ -328,6 +332,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointermove", handleWindowPointerMove);
   clearExitRevealTimer();
   cacheAttempt++;
+  if (waitingForIdleEnd.value) completeActionPlayback();
   stopAllVideos();
 });
 
@@ -336,14 +341,33 @@ function handleCanvasClick(event: MouseEvent) {
   if (!el) return;
   const rect = el.getBoundingClientRect();
   const hit = resolveHotzone(event.clientX, event.clientY, rect);
-  if (hit) playAction(hit.slot, hit.ratioX);
+  if (hit) requestAction(hit.slot, hit.ratioX);
 }
 
-/** 播放 slot 对应的互动视频，用 ratioX 记录触发位置；播放器忙时忽略。 */
-function playAction(slot: HotzoneSlot, ratioX: number) {
-  const accepted = triggerHotzone(slot, ratioX);
-  if (!accepted) return;
+/** 请求播放 slot 对应的互动视频，用 ratioX 记录触发位置；播放器忙时忽略。 */
+function requestAction(slot: HotzoneSlot, ratioX: number) {
+  if (!triggerHotzone(slot, ratioX)) return;
+  if (idleVideoPlaying.value && idleSrc.value) {
+    waitingForIdleEnd.value = true;
+  } else {
+    playAction(slot);
+  }
+}
 
+/** 待机视频结束或不可播放时，处理仍有效的互动请求。 */
+function handleIdleRoundEnd() {
+  const slot = playerState.activeAction;
+  if (!waitingForIdleEnd.value || !isPlaying.value || !slot) return;
+  waitingForIdleEnd.value = false;
+  if (isDriving.value || systemState.alertVisible) {
+    completeActionPlayback();
+    return;
+  }
+  playAction(slot);
+}
+
+/** 从头播放 slot 对应的互动视频，首帧就绪后覆盖待机层。 */
+function playAction(slot: HotzoneSlot) {
   finalizeFadingAction();
   const videoEl = videoRefs.value[slot];
   if (!videoEl) {
@@ -396,11 +420,11 @@ function playAction(slot: HotzoneSlot, ratioX: number) {
 
 /** 将设备手势映射到对应热区的中点；弹窗或抽屉打开时忽略输入。 */
 function handleSeatKey(slot: HotzoneSlot) {
-  if (!systemState.drawerOpen) playAction(slot, { left: 0.17, center: 0.5, right: 0.83 }[slot]);
+  if (!systemState.drawerOpen) requestAction(slot, { left: 0.17, center: 0.5, right: 0.83 }[slot]);
 }
 
 function handleVideoEnded(slot: HotzoneSlot) {
-  if (playerState.activeAction !== slot) return;
+  if (waitingForIdleEnd.value || playerState.activeAction !== slot) return;
   clearActionTimer();
   readyActionSlot.value = null;
 
@@ -495,9 +519,11 @@ function handleExitWallpaper() {
           :src="idleSrc"
           :poster="assets.idle_image.url"
           :playing="idleVideoPlaying"
+          :hold-at-end="isPlaying"
           class="stage-media stage-idle-video"
           test-id="wallpaper-idle-video"
           @first-frame="handleIdleFirstFrame"
+          @round-end="handleIdleRoundEnd"
         />
 
         <video
@@ -534,13 +560,13 @@ function handleExitWallpaper() {
             行驶中 · 互动锁定
           </span>
           <span
-            v-else-if="isPlaying && playerState.activeAction"
+            v-else-if="isPlaying && !waitingForIdleEnd && playerState.activeAction"
             class="state-chip success"
             data-testid="playing-status-pill"
           >
             播放中：{{ hotzoneLabel(playerState.activeAction) }}
           </span>
-          <span v-else class="state-chip" data-testid="idle-status-pill">
+          <span v-else-if="!waitingForIdleEnd" class="state-chip" data-testid="idle-status-pill">
             待机中 · 点击画面互动
           </span>
         </div>
