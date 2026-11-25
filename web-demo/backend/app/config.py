@@ -44,6 +44,7 @@ class Settings:
     comfyui_base_url: str = "http://127.0.0.1:18188"  # 本机 SSH 转发入口。
     comfyui_poll_seconds: float = 3.0
     comfyui_task_timeout: float = 1800.0
+    comfyui_reference_max_bytes: int = 0  # 远端参考图的传输上限，0 表示沿用原文件。
     kling_api_key: str = field(default="", repr=False)
     kling_base_url: str = "https://api-beijing.klingai.com"
     kling_poll_seconds: float = 15.0
@@ -87,6 +88,7 @@ class Settings:
             comfyui_base_url=comfyui_base,
             comfyui_poll_seconds=max(0.5, float(os.getenv("COMFYUI_POLL_SECONDS", str(cls.comfyui_poll_seconds)))),
             comfyui_task_timeout=max(30.0, float(os.getenv("COMFYUI_TASK_TIMEOUT_SECONDS", str(cls.comfyui_task_timeout)))),
+            comfyui_reference_max_bytes=max(0, int(os.getenv("COMFYUI_REFERENCE_MAX_BYTES", "0"))),
             kling_api_key=os.getenv("KLING_API_KEY", "").strip(),
             kling_base_url=kling_base,
             kling_poll_seconds=max(1.0, float(os.getenv("KLING_POLL_SECONDS", str(cls.kling_poll_seconds)))),

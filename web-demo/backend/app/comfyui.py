@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
 
 import httpx
+from PIL import Image
 
 from .comfyui_workflows import OUTPUT_NODE, image_workflow, video_workflow
 from .config import Settings
@@ -16,6 +18,23 @@ from .generation_settings import default_generation_settings
 from .providers import BaseGenerationProvider, PersistRemoteFn, ProgressFn, ProviderError
 
 VIDEO_STAGES = (("idle-video", "idle", 40), ("left", "left", 55), ("center", "center", 70), ("right", "right", 85))
+
+
+def _compress_reference(path: Path, max_bytes: int) -> BytesIO:
+    """按传输上限压缩模型参考图，返回可直接上传的 JPEG。"""
+    with Image.open(path) as source:
+        source.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+        image = source if source.mode == "RGB" else source.convert("RGB")
+        dimension = max(image.size)
+        while dimension >= 256:
+            encoded = BytesIO()
+            image.thumbnail((dimension, dimension), Image.Resampling.LANCZOS)
+            image.save(encoded, format="JPEG", quality=90, optimize=True)
+            if encoded.tell() <= max_bytes:
+                encoded.seek(0)
+                return encoded
+            dimension = dimension * 3 // 4
+    raise ProviderError("参考图无法压缩到当前 ComfyUI 传输上限")
 
 
 class ComfyUIGenerationProvider(BaseGenerationProvider):
@@ -44,7 +63,14 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
 
     async def _upload(self, base: str, path: Path, name: str) -> str:
         mime = "image/png" if path.suffix == ".png" else "image/jpeg"
-        with path.open("rb") as file:
+        limit = self.settings.comfyui_reference_max_bytes
+        if limit and path.stat().st_size > limit:
+            file = await asyncio.to_thread(_compress_reference, path, limit)
+            name = str(Path(name).with_suffix(".jpg"))
+            mime = "image/jpeg"
+        else:
+            file = path.open("rb")
+        with file:
             uploaded = await self._json(
                 "POST", f"{base}/upload/image", files={"image": (name, file, mime)},
                 data={"type": "input", "subfolder": "pet_wallpaper_demo", "overwrite": "true"},
@@ -78,7 +104,8 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         finally:
             tmp.unlink(missing_ok=True)
 
-    async def _collect(self, base: str, task_id: str, target: Path) -> None:
+    async def _collect(self, base: str, task_id: str, target: Path) -> dict:
+        """轮询任务历史、下载成品并返回 ComfyUI 成品记录。"""
         deadline = time.monotonic() + self.settings.comfyui_task_timeout
         errors = 0
         while time.monotonic() < deadline:
@@ -95,7 +122,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                     for item in files:
                         if item.get("type") == "output" and str(item.get("filename", "")).lower().endswith(target.suffix):
                             await self._download(base, item, target)
-                            return
+                            return item
                     if status.get("completed"):
                         raise ProviderError("ComfyUI 已完成任务，但没有返回所需格式的成品")
                 errors = 0
@@ -146,7 +173,13 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                         raise ProviderError("ComfyUI 提交任务后未返回任务 ID")
                     record.update(state="running", provider_id=queued["prompt_id"])
                     await persist_remote(remote)
-            await self._collect(base, record["provider_id"], target)
+            output = await self._collect(base, record["provider_id"], target)
+            if stage == "idle":
+                # 视频任务与待机图位于同一台 ComfyUI，直接读取其输出目录。
+                filename = output["filename"]
+                subfolder = output.get("subfolder")
+                path = f"{subfolder}/{filename}" if subfolder else filename
+                record["output_reference"] = f"{path} [output]"
             record["state"] = "complete"
             await persist_remote(remote)
             return target
@@ -155,8 +188,9 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         if not remote.get("idle", {}).get("provider_id"):
             photo = await self._upload(base, Path(job["photo_path"]), f"{job_id}-photo.jpg")
         idle = await render("idle", "image", 20, output_dir / "idle.png", photo)
-        reference = None
-        if any(not remote.get(stage, {}).get("provider_id") for stage, _, _ in VIDEO_STAGES):
+        reference = remote["idle"].get("output_reference")
+        # 旧任务没有记录远端成品路径，仍可使用已下载的待机图恢复。
+        if not reference and any(not remote.get(stage, {}).get("provider_id") for stage, _, _ in VIDEO_STAGES):
             reference = await self._upload(base, idle, f"{job_id}-idle.png")
         videos = {}
         for stage, prompt_key, progress in VIDEO_STAGES:
