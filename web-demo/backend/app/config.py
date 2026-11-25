@@ -30,6 +30,16 @@ def _parse_bool(raw: str | None, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _comfyui_url(name: str, default: str = "") -> str:
+    url = os.getenv(name, default).strip().rstrip("/")
+    parsed = urlparse(url)
+    if url or default:
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                or parsed.username or parsed.query or parsed.fragment):
+            raise ValueError(f"{name} 必须是合法的 HTTP 或 HTTPS 地址")
+    return url
+
+
 @dataclass(frozen=True)
 class Settings:
     """封装网页 Demo 后端配置；包含路径、供应商模式和凭据，密钥不出现在日志中。"""
@@ -42,6 +52,7 @@ class Settings:
     mock_controls_enabled: bool = True
     settings_password: str = field(default="", repr=False)  # 设置页密码，可由环境变量覆盖。
     comfyui_base_url: str = "http://127.0.0.1:18188"  # 本机 SSH 转发入口。
+    comfyui_secondary_base_url: str = ""  # 与主实例共用输入和输出目录的第二张 GPU 入口。
     comfyui_poll_seconds: float = 3.0
     comfyui_task_timeout: float = 1800.0
     comfyui_reference_max_bytes: int = 0  # 远端参考图的传输上限，0 表示沿用原文件。
@@ -66,11 +77,10 @@ class Settings:
         if parsed_kling.scheme != "https" or not parsed_kling.hostname:
             raise ValueError("KLING_BASE_URL 必须是合法的 HTTPS 地址")
 
-        comfyui_base = os.getenv("COMFYUI_BASE_URL", cls.comfyui_base_url).strip().rstrip("/")
-        parsed_comfyui = urlparse(comfyui_base)
-        if (parsed_comfyui.scheme not in {"http", "https"} or not parsed_comfyui.hostname
-                or parsed_comfyui.username or parsed_comfyui.query or parsed_comfyui.fragment):
-            raise ValueError("COMFYUI_BASE_URL 必须是合法的 HTTP 或 HTTPS 地址")
+        comfyui_base = _comfyui_url("COMFYUI_BASE_URL", cls.comfyui_base_url)
+        comfyui_secondary = _comfyui_url("COMFYUI_SECONDARY_BASE_URL")
+        if comfyui_secondary == comfyui_base:
+            raise ValueError("COMFYUI_SECONDARY_BASE_URL 必须使用独立的 ComfyUI 实例")
 
         mock_delay = max(0.05, float(os.getenv("DEMO_MOCK_DELAY_SECONDS", str(cls.mock_delay_seconds))))
         mock_controls = _parse_bool(os.getenv("DEMO_MOCK_CONTROLS"), default=True)
@@ -86,6 +96,7 @@ class Settings:
             mock_controls_enabled=mock_controls,
             settings_password=os.getenv("DEMO_SETTINGS_PASSWORD", ""),
             comfyui_base_url=comfyui_base,
+            comfyui_secondary_base_url=comfyui_secondary,
             comfyui_poll_seconds=max(0.5, float(os.getenv("COMFYUI_POLL_SECONDS", str(cls.comfyui_poll_seconds)))),
             comfyui_task_timeout=max(30.0, float(os.getenv("COMFYUI_TASK_TIMEOUT_SECONDS", str(cls.comfyui_task_timeout)))),
             comfyui_reference_max_bytes=max(0, int(os.getenv("COMFYUI_REFERENCE_MAX_BYTES", "0"))),

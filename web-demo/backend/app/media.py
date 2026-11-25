@@ -102,7 +102,11 @@ def inspect_video(path: Path) -> dict:
         str(path),
     ]
     try:
-        res = subprocess.run(cmd, check=True, capture_output=True, timeout=15)
+        try:
+            res = subprocess.run(cmd, check=True, capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            # 发布服务器短时繁忙时，给已落盘的视频一次重新探测的机会。
+            res = subprocess.run(cmd, check=True, capture_output=True, timeout=30)
         data = json.loads(res.stdout)
         stream = data["streams"][0]
         width = int(stream["width"])
@@ -119,6 +123,8 @@ def inspect_video(path: Path) -> dict:
             raise ValueError("视频维度或时长无效")
     except FileNotFoundError as exc:
         raise AssetValidationError("服务器缺少 ffprobe，无法校验视频规格") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise AssetValidationError(f"读取视频 {path.name} 的规格超时") from exc
     except (subprocess.SubprocessError, ValueError, ZeroDivisionError, KeyError, IndexError, TypeError) as exc:
         raise AssetValidationError(f"无法读取视频 {path.name} 的规格元数据") from exc
 
@@ -167,6 +173,8 @@ def normalize_video_for_playback(path: Path) -> None:
         encode_args = [
             "-c:v",
             "libx264",
+            "-threads",
+            "1",
             "-preset",
             "veryfast",
             "-crf",
@@ -183,7 +191,8 @@ def normalize_video_for_playback(path: Path) -> None:
             "yuv420p",
         ]
 
-    cmd = ["ffmpeg", "-y", "-i", str(path), *encode_args, "-movflags", "+faststart", "-an", str(tmp)]
+    # 限制解码和编码线程，避免多个版本同时发布时挤占小规格服务器资源。
+    cmd = ["ffmpeg", "-y", "-threads", "1", "-i", str(path), *encode_args, "-movflags", "+faststart", "-an", str(tmp)]
     try:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=120)
         tmp.replace(path)

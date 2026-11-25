@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
+from collections import defaultdict, deque
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
@@ -18,6 +20,7 @@ from .generation_settings import default_generation_settings
 from .providers import BaseGenerationProvider, PersistRemoteFn, ProgressFn, ProviderError
 
 VIDEO_STAGES = (("idle-video", "idle", 40), ("left", "left", 55), ("center", "center", 70), ("right", "right", 85))
+logger = logging.getLogger(__name__)
 
 
 def _compress_reference(path: Path, max_bytes: int) -> BytesIO:
@@ -43,6 +46,8 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None):
         self.settings = settings
         self.client = client or httpx.AsyncClient(timeout=90, trust_env=False)
+        # 多只宠物同时生成时，每个实例也只承接一个尚未收集结果的新任务。
+        self._endpoint_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def close(self) -> None:
         """关闭 ComfyUI HTTP 连接池，无返回值。"""
@@ -140,30 +145,37 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         """执行 job 的参数快照，用 pet 选择默认物种，回调持久化状态并返回本地素材路径。"""
         output_dir.mkdir(parents=True, exist_ok=True)
         config = job.get("generation_config") or default_generation_settings("comfyui")
-        base = config.get("comfyui_base_url", self.settings.comfyui_base_url)
+        remote = dict(job.get("remote_tasks") or {})
+        idle_record = remote.get("idle", {})
+        base = config.get("comfyui_base_url") or idle_record.get("base_url") or self.settings.comfyui_base_url
         prompts = config["prompts"]
         prompts = prompts.get(pet["species"], prompts)
-        remote = dict(job.get("remote_tasks") or {})
         job_id = job["id"]
         seed = int(job_id[:12], 16)
+        current_progress = job.get("progress", 0)
 
-        async def render(stage: str, prompt_key: str, progress: int, target: Path, reference: str | None) -> Path:
-            record = remote.get(stage, {})
-            if record.get("state") == "complete" and target.is_file():
-                return target
-            await update_progress(stage, progress)
+        async def advance(stage: str, progress: int) -> None:
+            nonlocal current_progress
+            if progress > current_progress:
+                current_progress = progress
+                await update_progress(stage, progress)
+
+        async def render(
+            endpoint: str, stage: str, prompt_key: str, seed_offset: int, target: Path, reference: str | None,
+        ) -> Path:
+            record = remote.get(stage) or {}
             if not record.get("provider_id"):
                 is_image = stage == "idle"
                 kind = "image" if is_image else "video"
                 build = image_workflow if is_image else video_workflow
                 graph = build(reference, prompts[prompt_key], (config[f"{kind}_width"], config[f"{kind}_height"]),
-                              seed + progress, f"pet_wallpaper_demo/{job_id}/{stage}")
+                              seed + seed_offset, f"pet_wallpaper_demo/{job_id}/{stage}")
                 task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"pet-wallpaper-demo/{job_id}/{stage}"))
-                # 先记录本次提交的任务 ID，避免重启后重复排队。
-                record = remote[stage] = {"state": "submitting", "provider_id": task_id}
+                # 提交前落盘实例地址与任务 ID，重启后继续向原实例查询。
+                record = remote[stage] = {"state": "submitting", "provider_id": task_id, "base_url": endpoint}
                 await persist_remote(remote)
                 try:
-                    queued = await self._json("POST", f"{base}/prompt", json={"prompt": graph, "prompt_id": task_id})
+                    queued = await self._json("POST", f"{endpoint}/prompt", json={"prompt": graph, "prompt_id": task_id})
                 except ProviderError as exc:
                     # 连接中断时请求可能已被接受，交给历史查询确认。
                     if not isinstance(exc.__cause__, (httpx.ReadError, httpx.ReadTimeout, httpx.RemoteProtocolError)):
@@ -173,9 +185,9 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                         raise ProviderError("ComfyUI 提交任务后未返回任务 ID")
                     record.update(state="running", provider_id=queued["prompt_id"])
                     await persist_remote(remote)
-            output = await self._collect(base, record["provider_id"], target)
+            output = await self._collect(endpoint, record["provider_id"], target)
             if stage == "idle":
-                # 视频任务与待机图位于同一台 ComfyUI，直接读取其输出目录。
+                # 两个实例共用输出目录，视频工作流可以直接读取待机图。
                 filename = output["filename"]
                 subfolder = output.get("subfolder")
                 path = f"{subfolder}/{filename}" if subfolder else filename
@@ -184,15 +196,70 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
             await persist_remote(remote)
             return target
 
-        photo = None
-        if not remote.get("idle", {}).get("provider_id"):
-            photo = await self._upload(base, Path(job["photo_path"]), f"{job_id}-photo.jpg")
-        idle = await render("idle", "image", 20, output_dir / "idle.png", photo)
+        idle = output_dir / "idle.png"
+        if idle_record.get("state") != "complete" or not idle.is_file():
+            photo = None
+            if not idle_record.get("provider_id"):
+                photo = await self._upload(base, Path(job["photo_path"]), f"{job_id}-photo.jpg")
+            image_endpoint = idle_record.get("base_url", base)
+            async with self._endpoint_locks[image_endpoint]:
+                await advance("idle", 20)
+                await render(image_endpoint, "idle", "image", 20, idle, photo)
         reference = remote["idle"].get("output_reference")
         # 旧任务没有记录远端成品路径，仍可使用已下载的待机图恢复。
         if not reference and any(not remote.get(stage, {}).get("provider_id") for stage, _, _ in VIDEO_STAGES):
             reference = await self._upload(base, idle, f"{job_id}-idle.png")
-        videos = {}
-        for stage, prompt_key, progress in VIDEO_STAGES:
-            videos[stage] = await render(stage, prompt_key, progress, output_dir / f"{stage}.mp4", reference)
-        return idle, videos
+        # 第二实例与当前主实例成对部署。修改主地址后，旧任务的新阶段仍用旧主实例。
+        secondary = self.settings.comfyui_secondary_base_url if base == self.settings.comfyui_base_url else ""
+        if secondary and any(not remote.get(stage, {}).get("provider_id") for stage, _, _ in VIDEO_STAGES):
+            try:
+                stats = await self._json("GET", f"{secondary}/system_stats", timeout=5)
+                if not stats.get("devices"):
+                    raise ProviderError("第二个 ComfyUI 实例没有可用设备")
+            except ProviderError:
+                logger.warning("第二个 ComfyUI 实例不可用，未提交的视频改用主实例")
+                secondary = ""
+        endpoints = (base, secondary) if secondary else (base,)
+
+        videos: dict[str, Path] = {}
+        pending: deque[tuple[str, str, int]] = deque()
+        recovering: dict[str, deque[tuple[str, str, int]]] = defaultdict(deque)
+        for stage, prompt_key, seed_offset in VIDEO_STAGES:
+            record = remote.get(stage, {})
+            target = output_dir / f"{stage}.mp4"
+            if record.get("state") == "complete" and target.is_file():
+                videos[stage] = target
+            elif record.get("provider_id"):
+                # 双卡上线前保存的任务没有地址字段，查询原主实例。
+                endpoint = record.get("base_url", base)
+                recovering[endpoint].append((stage, prompt_key, seed_offset))
+            else:
+                pending.append((stage, prompt_key, seed_offset))
+
+        started = len(videos)
+
+        async def run_endpoint(endpoint: str) -> None:
+            nonlocal started
+            saved = recovering[endpoint]
+            can_submit = endpoint in endpoints
+            while saved or (can_submit and pending):
+                async with self._endpoint_locks[endpoint]:
+                    # 恢复已提交的任务后，空闲实例从同一队列领取下一个视频。
+                    queue = saved if saved else pending
+                    if not queue:
+                        return
+                    stage, prompt_key, seed_offset = queue.popleft()
+                    progress = VIDEO_STAGES[started][2]
+                    started += 1
+                    await advance(stage, progress)
+                    target = output_dir / f"{stage}.mp4"
+                    videos[stage] = await render(endpoint, stage, prompt_key, seed_offset, target, reference)
+
+        tasks = [asyncio.create_task(run_endpoint(endpoint)) for endpoint in dict.fromkeys((*endpoints, *recovering))]
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+        return idle, {stage: videos[stage] for stage, _, _ in VIDEO_STAGES}
