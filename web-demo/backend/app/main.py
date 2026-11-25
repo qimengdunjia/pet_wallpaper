@@ -25,6 +25,7 @@ from .providers import BaseGenerationProvider
 from .worker import GenerationWorker
 
 SESSION_COOKIE = "pet_demo_session"
+SEAT_KEY_URL = "ws://192.168.4.1/ws"  # 浏览器直连按键热点，与安卓项目的默认固件地址一致。
 DEFAULT_WALLPAPER_PET_ID = "default-dog"
 DEFAULT_WALLPAPER_VERSION_ID = "default-dog-v1"
 DEFAULT_WALLPAPER_TIMESTAMP = "2026-11-23T00:00:00+00:00"
@@ -278,7 +279,7 @@ def create_app(
             response.headers.setdefault("Cache-Control", "no-store")
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; "
-            "style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
+            f"style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' {SEAT_KEY_URL}; frame-ancestors 'none'; base-uri 'self'"
         )
         return response
 
@@ -293,6 +294,7 @@ def create_app(
         return {
             "provider": mode,
             "mock_controls_enabled": mode == "mock" and config.mock_controls_enabled,
+            "seat_key_url": SEAT_KEY_URL,
             "default_mock_delay_seconds": config.mock_delay_seconds,
             "max_upload_mb": config.max_upload_bytes // 1024 // 1024,
             "transitions": {

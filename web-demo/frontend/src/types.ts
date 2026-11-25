@@ -94,6 +94,7 @@ export interface CurrentWallpaper {
 }
 
 export interface AppConfig {
+  seat_key_url?: string; // 由服务端与站点连接策略一起下发的按键地址。
   provider: ProviderMode;
   mock_controls_enabled: boolean;
   default_mock_delay_seconds: number;

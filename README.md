@@ -49,6 +49,14 @@ bash scripts/test_demo.sh  # 运行后端 pytest、前端 Vitest、类型检查�
 
 本地前端开发时可另启 `cd web-demo/frontend && npm run dev`（端口 `5173`，`/api` 自动代理至 `127.0.0.1:8080`）。Demo 运行期数据默认保存在 `web-demo/backend/data/`。
 
+### 用一台电脑连接实体按键
+
+在电脑的新版 Chrome 或 Edge 中打开服务器上的 Demo，进入宠物壁纸，点击底部的「实体按键」。使用双网卡时，保留原网卡作为默认上网线路，用另一张无线网卡连接按键的 `Agent-IMU` 热点。电脑只有一张 Wi-Fi 网卡时，先上网打开壁纸，等面板显示「壁纸已就绪」，再切换到按键热点并保留当前标签页。
+
+点击「连接按键」，允许浏览器访问本地网络。电脑会直接连接按键的 `ws://192.168.4.1/ws`。在按键的宠物界面短按实体键或轻点触屏可触发中间动作；向左、向右滑动触发对应动作。断线后可在面板中重新连接。行驶模式、驾驶提醒、宠物弹窗及动作播放期间沿用壁纸的互动锁定。
+
+切断外网后，当前已加载的宠物壁纸仍可互动。刷新页面、生成新壁纸或加载其他宠物前，请恢复外网。HTTPS 页面直连局域网 WebSocket 需要支持本地网络访问授权的浏览器，公网 HTTPS 实测通过桌面 Edge 156；Chrome for Testing 147.0.7727.15 会阻止该连接。[Chrome 本地网络访问说明](https://developer.chrome.com/docs/modern-web-guidance/guides/security/local-network-access)
+
 ## 算法验证
 
 独立测试可灵图生图/图生视频提示词预设或运行本地 ComfyUI 工作流时，从仓库根目录执行以下命令（默认端口 `8000`，可用 `PET_PORT` 覆盖）。首次安装、网页 API 与 ComfyUI 使用方式见[算法验证说明](algorithm-lab/README.md)。

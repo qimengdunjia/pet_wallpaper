@@ -1,9 +1,9 @@
 <!-- 文件用途：在等比画布播放宠物壁纸，管理热区、模式按钮与宠物弹层。 -->
 <script setup lang="ts">
 import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { hotzoneLabel, resolveHotzone } from "@/lib/hotzone";
-import { getPlayableVideoUrl, preloadAssetVideosBackground, preloadVideoBlob } from "@/lib/preload";
+import { getPlayableVideoUrl, preloadVideoBlob } from "@/lib/preload";
 import { findPetById } from "@/stores/petStore";
 import {
   completeActionPlayback,
@@ -18,6 +18,7 @@ import type { HotzoneSlot } from "@/types";
 import PetConfirmModal from "@/components/PetConfirmModal.vue";
 import PetEditModal from "@/components/PetEditModal.vue";
 import PetSelectorPanel from "@/components/PetSelectorPanel.vue";
+import SeatKeyControl from "@/components/SeatKeyControl.vue";
 import SeamlessLoopVideo from "@/components/SeamlessLoopVideo.vue";
 
 type VideoWithRVFC = HTMLVideoElement & {
@@ -37,6 +38,12 @@ let actionStartSeq = 0;
 
 const currentPet = computed(() => findPetById(playerState.currentPetId));
 const assets = computed(() => playerState.currentAssets);
+
+const cacheState = ref<"loading" | "ready" | "failed">("loading");
+const imageState = ref<"loading" | "ready" | "failed">("loading");
+const offlineState = computed(() => imageState.value === "ready" ? cacheState.value : imageState.value);
+const idleSrc = ref("");
+let cacheAttempt = 0;
 
 const isPlaying = computed(() => playerState.playbackState === "playing");
 const isSwitching = computed(() => playerState.playbackState === "switching");
@@ -99,29 +106,44 @@ function stopAllVideos() {
   }
 }
 
-function syncActionSources() {
+/** 将当前壁纸的视频完整读入内存；retry 表示重新装载先前失败的媒体元素。 */
+async function syncActionSources(retry = false) {
+  const attempt = ++cacheAttempt;
   const current = assets.value;
-  if (!current) {
-    actionSrcs.value = { left: "", center: "", right: "" };
-    return;
-  }
-  preloadAssetVideosBackground(current);
-  for (const slot of ["left", "center", "right"] as const) {
-    const rawUrl = current.actions[slot].url;
-    actionSrcs.value[slot] = getPlayableVideoUrl(rawUrl);
-    if (!actionSrcs.value[slot].startsWith("blob:")) {
-      void preloadVideoBlob(rawUrl)
-        .then((blobUrl) => {
-          if (assets.value?.version_id !== current.version_id) return;
-          if (!blobUrl.startsWith("blob:")) return;
-          // 仅在当前槽位未在播放时升级为内存 Blob 地址，避免打断正在播放的动作
-          if (playerState.activeAction !== slot && fadingActionSlot.value !== slot) {
-            actionSrcs.value[slot] = blobUrl;
-          }
-        })
-        .catch(() => undefined);
+  cacheState.value = "loading";
+  if (!current) return;
+  const idleUrl = current.idle_video?.url;
+  if (!retry) idleSrc.value = idleUrl || "";
+  const prepareAction = async (slot: HotzoneSlot) => {
+    const url = current.actions[slot].url;
+    if (!retry) actionSrcs.value[slot] = getPlayableVideoUrl(url);
+    const src = await preloadVideoBlob(url);
+    if (!src.startsWith("blob:")) throw new Error("浏览器无法缓存互动视频");
+    if (attempt === cacheAttempt && playerState.activeAction !== slot && fadingActionSlot.value !== slot) {
+      actionSrcs.value[slot] = src;
     }
+  };
+  try {
+    const [idle] = await Promise.all([
+      idleUrl ? preloadVideoBlob(idleUrl) : Promise.resolve(""),
+      prepareAction("left"), prepareAction("center"), prepareAction("right"),
+    ]);
+    if (attempt !== cacheAttempt) return;
+    if (idleUrl && !idle.startsWith("blob:")) throw new Error("浏览器无法缓存待机视频");
+    if (retry && idle) idleSrc.value = idle;
+    cacheState.value = "ready";
+  } catch {
+    if (attempt === cacheAttempt) cacheState.value = "failed";
   }
+}
+
+const imageAttempt = ref(0);
+function retryMedia() {
+  if (imageState.value === "failed") {
+    imageState.value = "loading";
+    imageAttempt.value++;
+  }
+  void syncActionSources(true);
 }
 
 function waitForVideoFirstFrame(videoEl: HTMLVideoElement, timeoutMs = 120): Promise<void> {
@@ -197,16 +219,14 @@ watch(
   [() => assets.value?.version_id, () => assets.value?.idle_video?.url],
   () => {
     stopAllVideos();
-    syncActionSources();
+    imageState.value = "loading";
+    void syncActionSources();
   },
   { immediate: true },
 );
 
-onMounted(() => {
-  syncActionSources();
-});
-
 onBeforeUnmount(() => {
+  cacheAttempt++;
   stopAllVideos();
 });
 
@@ -215,18 +235,28 @@ function handleCanvasClick(event: MouseEvent) {
   if (!el) return;
   const rect = el.getBoundingClientRect();
   const hit = resolveHotzone(event.clientX, event.clientY, rect);
-  if (!hit) return;
+  if (hit) playAction(hit.slot, hit.ratioX);
+}
 
-  const accepted = triggerHotzone(hit.slot, hit.ratioX);
+/** 播放 slot 对应的互动视频，用 ratioX 记录触发位置；播放器忙时忽略。 */
+function playAction(slot: HotzoneSlot, ratioX: number) {
+  const accepted = triggerHotzone(slot, ratioX);
   if (!accepted) return;
 
   finalizeFadingAction();
-  const videoEl = videoRefs.value[hit.slot];
+  const videoEl = videoRefs.value[slot];
   if (!videoEl) {
     completeActionPlayback();
     return;
   }
 
+  // 当前段播放期间才下载完成的缓存，在下次启动这一段时再切换。
+  const url = assets.value?.actions[slot].url;
+  const cached = url && getPlayableVideoUrl(url);
+  if (cached?.startsWith("blob:") && videoEl.src !== cached) {
+    actionSrcs.value[slot] = cached;
+    videoEl.src = cached;
+  }
   const seq = ++actionStartSeq;
   clearActionTimer();
   readyActionSlot.value = null;
@@ -242,8 +272,8 @@ function handleCanvasClick(event: MouseEvent) {
     playPromise
       .then(() => waitForVideoFirstFrame(videoEl, 120))
       .then(() => {
-        if (seq === actionStartSeq && playerState.playbackState === "playing" && playerState.activeAction === hit.slot) {
-          readyActionSlot.value = hit.slot;
+        if (seq === actionStartSeq && playerState.playbackState === "playing" && playerState.activeAction === slot) {
+          readyActionSlot.value = slot;
         }
       })
       .catch(() => {
@@ -252,15 +282,20 @@ function handleCanvasClick(event: MouseEvent) {
         }
       });
   } else {
-    readyActionSlot.value = hit.slot;
+    readyActionSlot.value = slot;
   }
 
-  const durationSec = assets.value?.actions[hit.slot]?.duration ?? 4.5;
+  const durationSec = assets.value?.actions[slot]?.duration ?? 4.5;
   const safetyMs = Math.max(6500, Math.ceil((durationSec + 2.5) * 1000));
   actionSafetyTimer = window.setTimeout(() => {
     finalizeFadingAction();
     completeActionPlayback();
   }, safetyMs);
+}
+
+/** 将设备手势映射到对应热区的中点；弹窗或抽屉打开时忽略输入。 */
+function handleSeatKey(slot: HotzoneSlot) {
+  if (!systemState.drawerOpen) playAction(slot, { left: 0.17, center: 0.5, right: 0.83 }[slot]);
 }
 
 function handleVideoEnded(slot: HotzoneSlot) {
@@ -324,7 +359,10 @@ function handleExitWallpaper() {
     >
       <template v-if="assets">
         <img
+          :key="assets.version_id + '-' + imageAttempt"
           :src="assets.idle_image.url"
+          @load="imageState = 'ready'"
+          @error="imageState = 'failed'"
           :alt="currentPet?.name || '宠物壁纸'"
           class="stage-media stage-idle"
           data-testid="wallpaper-idle-image"
@@ -333,7 +371,7 @@ function handleExitWallpaper() {
         <SeamlessLoopVideo
           v-if="assets.idle_video"
           :key="`${assets.version_id}-idle-video`"
-          :src="assets.idle_video.url"
+          :src="idleSrc"
           :poster="assets.idle_image.url"
           :playing="idleVideoPlaying"
           class="stage-media stage-idle-video"
@@ -423,6 +461,13 @@ function handleExitWallpaper() {
           >
             <span>新增宠物</span>
           </button>
+          <SeatKeyControl
+            v-if="systemState.config?.seat_key_url"
+            :url="systemState.config.seat_key_url"
+            :offline-state="offlineState"
+            @retry-media="retryMedia"
+            @action="handleSeatKey"
+          />
         </div>
 
         <button
