@@ -12,7 +12,9 @@ import { hasActiveBackgroundJobs } from "@/stores/generationStore";
 import { petState } from "@/stores/petStore";
 import { interruptPlayback, playerState } from "@/stores/playerStore";
 import {
+  isWallpaperImmersive,
   setDrivingMode,
+  setImmersiveMode,
   setRoute,
   systemState,
   triggerSafetyAlert,
@@ -20,8 +22,12 @@ import {
 import { useClock } from "@/stores/useClock";
 
 const clockText = useClock();
+const isImmersive = computed(() => isWallpaperImmersive());
 const showReferenceStatus = computed(
   () => !systemState.drawerOpen && (systemState.route === "onboarding-upload" || playerState.selectorOpen),
+);
+const canEnterImmersive = computed(
+  () => systemState.route === "wallpaper" && !playerState.selectorOpen,
 );
 
 const isDarkStage = computed(
@@ -80,6 +86,10 @@ function handleTriggerAlert() {
   );
 }
 
+function enterImmersiveMode() {
+  setImmersiveMode(true);
+}
+
 async function toggleFullscreen() {
   try {
     if (!document.fullscreenElement) {
@@ -95,6 +105,7 @@ async function toggleFullscreen() {
 
 <template>
   <header
+    v-if="!isImmersive"
     class="system-topbar"
     :class="{ 'is-dark-stage': isDarkStage, 'upload-status': showReferenceStatus }"
     data-testid="system-topbar"
@@ -171,6 +182,15 @@ async function toggleFullscreen() {
         @click="systemState.drawerOpen = !systemState.drawerOpen"
       >
         {{ systemState.drawerOpen ? "收起验收设置" : "演示与规格" }}
+      </button>
+
+      <button
+        v-if="canEnterImmersive"
+        class="top-ctrl-btn"
+        data-testid="toggle-immersive"
+        @click="enterImmersiveMode"
+      >
+        沉浸模式
       </button>
 
       <button

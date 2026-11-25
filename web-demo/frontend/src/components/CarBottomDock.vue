@@ -14,7 +14,9 @@ import climatePanelIcon from "@/assets/mastergo/dock-climate-panel.svg";
 import musicIcon from "@/assets/mastergo/dock-music.svg";
 import { petState } from "@/stores/petStore";
 import { interruptPlayback, playerState } from "@/stores/playerStore";
-import { setRoute, showToast, systemState } from "@/stores/systemStore";
+import { isWallpaperImmersive, setRoute, showToast, systemState } from "@/stores/systemStore";
+
+const isImmersive = computed(() => isWallpaperImmersive());
 
 const isDarkStage = computed(
   () =>
@@ -52,6 +54,7 @@ function openSettings() {
 
 <template>
   <footer
+    v-if="!isImmersive"
     class="car-bottom-dock mastergo-dock"
     :class="{ 'is-dark-stage': isDarkStage }"
     data-testid="car-bottom-dock"

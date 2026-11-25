@@ -1,7 +1,7 @@
 <!-- 文件用途：在等比画布播放宠物壁纸，管理热区、模式按钮与宠物弹层。 -->
 <script setup lang="ts">
 import wallpaperDog from "@/assets/mastergo/wallpaper-dog.png";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { hotzoneLabel, resolveHotzone } from "@/lib/hotzone";
 import { getPlayableVideoUrl, preloadVideoBlob } from "@/lib/preload";
 import { findPetById } from "@/stores/petStore";
@@ -12,7 +12,14 @@ import {
   resetLocalView,
   triggerHotzone,
 } from "@/stores/playerStore";
-import { guardParkedAction, setRoute, showToast, systemState } from "@/stores/systemStore";
+import {
+  guardParkedAction,
+  isWallpaperImmersive,
+  setImmersiveMode,
+  setRoute,
+  showToast,
+  systemState,
+} from "@/stores/systemStore";
 import { useClock } from "@/stores/useClock";
 import type { HotzoneSlot } from "@/types";
 import PetConfirmModal from "@/components/PetConfirmModal.vue";
@@ -48,6 +55,73 @@ let cacheAttempt = 0;
 const isPlaying = computed(() => playerState.playbackState === "playing");
 const isSwitching = computed(() => playerState.playbackState === "switching");
 const isDriving = computed(() => systemState.drivingMode === "driving");
+const isImmersive = computed(() => isWallpaperImmersive());
+
+const exitRevealVisible = ref(false);
+const topHoverArmed = ref(false);
+let exitRevealTimer: number | null = null;
+let hotspotTouchStartY: number | null = null;
+
+function clearExitRevealTimer() {
+  if (exitRevealTimer !== null) {
+    window.clearTimeout(exitRevealTimer);
+    exitRevealTimer = null;
+  }
+}
+
+function exitImmersiveMode() {
+  clearExitRevealTimer();
+  exitRevealVisible.value = false;
+  topHoverArmed.value = false;
+  setImmersiveMode(false);
+}
+
+function revealExitButtonTemporarily() {
+  if (!isImmersive.value) return;
+  exitRevealVisible.value = true;
+  clearExitRevealTimer();
+  exitRevealTimer = window.setTimeout(() => {
+    exitRevealVisible.value = false;
+    exitRevealTimer = null;
+  }, 3000);
+}
+
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (isImmersive.value && event.key === "Escape") {
+    exitImmersiveMode();
+  }
+}
+
+function handleWindowPointerMove(event: PointerEvent) {
+  if (!isImmersive.value || event.pointerType === "touch") return;
+  if (event.clientY > 56) {
+    topHoverArmed.value = true;
+  }
+  if (topHoverArmed.value && event.clientY <= 28) {
+    clearExitRevealTimer();
+    exitRevealVisible.value = true;
+  } else if (exitRevealVisible.value && event.clientY > 88) {
+    clearExitRevealTimer();
+    exitRevealVisible.value = false;
+  }
+}
+
+function handleHotspotTouchStart(event: TouchEvent) {
+  hotspotTouchStartY = event.touches[0]?.clientY ?? null;
+}
+
+function handleHotspotTouchMove(event: TouchEvent) {
+  if (hotspotTouchStartY === null) return;
+  const currentY = event.touches[0]?.clientY;
+  if (typeof currentY === "number" && currentY - hotspotTouchStartY >= 36) {
+    hotspotTouchStartY = null;
+    exitImmersiveMode();
+  }
+}
+
+function handleHotspotTouchEnd() {
+  hotspotTouchStartY = null;
+}
 
 const idleVideoPlaying = computed(() => {
   if (!assets.value?.idle_video) return false;
@@ -225,7 +299,34 @@ watch(
   { immediate: true },
 );
 
+watch(
+  isImmersive,
+  () => {
+    clearExitRevealTimer();
+    exitRevealVisible.value = false;
+    topHoverArmed.value = false;
+    hotspotTouchStartY = null;
+  },
+);
+
+watch(
+  () => playerState.selectorOpen,
+  (open) => {
+    if (open && systemState.immersiveMode) {
+      setImmersiveMode(false);
+    }
+  },
+);
+
+onMounted(() => {
+  window.addEventListener("keydown", handleWindowKeydown);
+  window.addEventListener("pointermove", handleWindowPointerMove);
+});
+
 onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleWindowKeydown);
+  window.removeEventListener("pointermove", handleWindowPointerMove);
+  clearExitRevealTimer();
   cacheAttempt++;
   stopAllVideos();
 });
@@ -346,9 +447,29 @@ function handleExitWallpaper() {
 <template>
   <section
     class="wallpaper-viewport"
+    :class="{ 'is-immersive': isImmersive }"
+    :data-immersive="isImmersive ? 'true' : 'false'"
     data-testid="wallpaper-stage-view"
     @click="handleBlackBarClick"
   >
+    <div
+      v-if="isImmersive"
+      class="immersive-exit-hotspot"
+      data-testid="immersive-exit-hotspot"
+      @click.stop="revealExitButtonTemporarily"
+      @touchstart.stop="handleHotspotTouchStart"
+      @touchmove.stop="handleHotspotTouchMove"
+      @touchend.stop="handleHotspotTouchEnd"
+    />
+    <button
+      v-if="isImmersive && exitRevealVisible"
+      class="immersive-exit-btn"
+      data-testid="exit-immersive-btn"
+      @click.stop="exitImmersiveMode"
+      @mouseenter="clearExitRevealTimer"
+    >
+      退出沉浸
+    </button>
     <div
       ref="canvasRef"
       class="wallpaper-canvas-16x9 mastergo-cloud-sky"
@@ -402,7 +523,7 @@ function handleExitWallpaper() {
       </div>
 
       <!-- 悬浮时钟与宠物状态不拦截画布点击。 -->
-      <div class="floating-stage-info">
+      <div v-if="!isImmersive" class="floating-stage-info" data-testid="floating-stage-info">
         <div class="floating-clock" :class="{ dimmed: isPlaying }">{{ clockText }}</div>
         <div class="pet-pill-badge">
           <strong data-testid="current-pet-name">{{ currentPet?.name || "未命名宠物" }}</strong>
@@ -426,7 +547,7 @@ function handleExitWallpaper() {
       </div>
 
       <!-- 可选热区辅助边界线 -->
-      <div v-if="systemState.showHotzoneGuides" class="hotzone-guides" data-testid="hotzone-guides">
+      <div v-if="systemState.showHotzoneGuides && !isImmersive" class="hotzone-guides" data-testid="hotzone-guides">
         <div class="zone-box zone-left">
           <span>左热区 (0–34%)</span>
         </div>
@@ -438,12 +559,12 @@ function handleExitWallpaper() {
         </div>
       </div>
 
-      <div v-if="isSwitching" class="switching-banner" data-testid="switching-banner">
+      <div v-if="isSwitching && !isImmersive" class="switching-banner" data-testid="switching-banner">
         正在校验并切换壁纸...
       </div>
 
-      <!-- 按钮尺寸和间距取自 MasterGo 屏 09（3:2720、3:2729、3:2730）。 -->
-      <div class="mode-controls-bar" data-testid="mode-controls-bar" @click.stop>
+      <!-- 按钮尺寸和间距取自 MasterGo 屏 09（3:2720、3:2729、3:2730）；使用 v-show 保持实体按键连接。 -->
+      <div v-show="!isImmersive" class="mode-controls-bar" data-testid="mode-controls-bar" @click.stop>
         <div class="mode-left-group">
           <button
             class="btn mode-glass-btn"
@@ -721,6 +842,38 @@ function handleExitWallpaper() {
 
 .mode-glass-btn:disabled {
   opacity: 0.45;
+}
+
+.immersive-exit-hotspot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 55;
+  background: transparent;
+}
+
+.immersive-exit-btn {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 7px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+  background: rgba(10, 14, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.immersive-exit-btn:hover {
+  background: rgba(18, 24, 40, 0.88);
 }
 
 </style>

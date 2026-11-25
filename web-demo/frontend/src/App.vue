@@ -1,6 +1,6 @@
 <!-- 文件用途：初始化网页 Demo，恢复档案与任务后按当前路由渲染页面。 -->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted } from "vue";
 import {
   fetchConfig,
   fetchCurrentWallpaper,
@@ -20,7 +20,7 @@ import {
   setSavedWallpaper,
 } from "@/stores/petStore";
 import { setDisplayedWallpaper } from "@/stores/playerStore";
-import { setRoute, systemState } from "@/stores/systemStore";
+import { isWallpaperImmersive, setRoute, systemState } from "@/stores/systemStore";
 import type { RouteView } from "@/types";
 import CarBottomDock from "@/components/CarBottomDock.vue";
 import DemoControlDrawer from "@/components/DemoControlDrawer.vue";
@@ -132,6 +132,8 @@ function handleHashChange() {
   }
 }
 
+const isImmersive = computed(() => isWallpaperImmersive());
+
 onMounted(() => {
   window.addEventListener("hashchange", handleHashChange);
   void bootstrap();
@@ -147,7 +149,12 @@ onBeforeUnmount(() => {
   <main class="app-shell">
     <SystemTopBar />
 
-    <div v-if="systemState.toast" class="toast-banner" :class="systemState.toast.type" data-testid="toast-banner">
+    <div
+      v-if="systemState.toast && !isImmersive"
+      class="toast-banner"
+      :class="systemState.toast.type"
+      data-testid="toast-banner"
+    >
       {{ systemState.toast.text }}
     </div>
 

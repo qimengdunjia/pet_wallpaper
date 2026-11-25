@@ -38,6 +38,7 @@ export const systemState = reactive({
   alertMessage: "前方路况变化，请注意驾驶安全，已暂停壁纸互动动作。",
   toast: null as ToastMessage | null,
   drawerOpen: false,
+  immersiveMode: false,
   showHotzoneGuides: false,
   mockPreset: "fast" as MockPreset,
   cutoutStrategy: "after_first_round" as CutoutStrategy,
@@ -59,6 +60,9 @@ export function setRoute(view: RouteView, options?: { syncHash?: boolean }) {
     if (view === "settings" && systemState.route !== "settings") {
       systemState.settingsReturnRoute = systemState.route;
     }
+    if (view !== "wallpaper") {
+      systemState.immersiveMode = false;
+    }
     systemState.routeRevision += 1;
     systemState.route = view;
   }
@@ -67,6 +71,19 @@ export function setRoute(view: RouteView, options?: { syncHash?: boolean }) {
     if (window.location.hash !== targetHash) {
       window.location.hash = targetHash;
     }
+  }
+}
+
+export function isWallpaperImmersive(): boolean {
+  return systemState.route === "wallpaper" && systemState.immersiveMode;
+}
+
+export function setImmersiveMode(enabled: boolean) {
+  const next = enabled && systemState.route === "wallpaper";
+  systemState.immersiveMode = next;
+  if (next) {
+    systemState.drawerOpen = false;
+    clearToast();
   }
 }
 
@@ -128,6 +145,7 @@ export function resetSystemState() {
   systemState.alertVisible = false;
   systemState.toast = null;
   systemState.drawerOpen = false;
+  systemState.immersiveMode = false;
   systemState.showHotzoneGuides = false;
   systemState.mockPreset = "fast";
   systemState.cutoutStrategy = "after_first_round";
