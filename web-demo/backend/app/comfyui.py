@@ -16,6 +16,7 @@ from PIL import Image
 
 from .comfyui_workflows import OUTPUT_NODE, image_workflow, video_workflow
 from .config import Settings
+from .decoration import portrait_prompt, styled_idle_prompt, styled_video_prompt
 from .generation_settings import default_generation_settings
 from .providers import BaseGenerationProvider, PersistRemoteFn, ProgressFn, ProviderError
 
@@ -141,7 +142,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
             raise ProviderError("无法连接或读取 ComfyUI，请检查服务和 SSH 转发", method == "GET") from exc
 
     async def _upload(self, base: str, path: Path, name: str) -> str:
-        mime = "image/png" if path.suffix == ".png" else "image/jpeg"
+        mime = {".png": "image/png", ".webp": "image/webp"}.get(path.suffix, "image/jpeg")
         limit = self.settings.comfyui_reference_max_bytes
         if limit and path.stat().st_size > limit:
             file = await asyncio.to_thread(_compress_reference, path, limit)
@@ -227,6 +228,8 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         job_id = job["id"]
         video_seed = int(job_id[:12], 16)
         current_progress = job.get("progress", 0)
+        portrait_only = job.get("portrait_only")
+        decoration = job.get("decoration")
 
         async def advance(stage: str, progress: int) -> None:
             nonlocal current_progress
@@ -239,11 +242,25 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         ) -> Path:
             record = remote.get(stage) or {}
             if not record.get("provider_id"):
-                is_image = stage == "idle"
+                is_image = stage in {"idle", "portrait"}
                 kind = "image" if is_image else "video"
-                build = image_workflow if is_image else video_workflow
-                graph = build(reference, prompts[prompt_key], (config[f"{kind}_width"], config[f"{kind}_height"]),
-                              seed, f"pet_wallpaper_demo/{job_id}/{stage}")
+                prompt = prompts[prompt_key]
+                if stage == "portrait":
+                    prompt = portrait_prompt(prompt)
+                elif decoration:
+                    prompt = styled_idle_prompt(prompt, decoration) if is_image else styled_video_prompt(prompt)
+                size = (config[f"{kind}_width"], config[f"{kind}_height"])
+                prefix = f"pet_wallpaper_demo/{job_id}/{stage}"
+                if is_image:
+                    accessory_reference = None
+                    if decoration and decoration["accessory"] != "none":
+                        filename = f"{decoration['accessory']}.webp"
+                        accessory_reference = await self._upload(
+                            endpoint, self.settings.assets_dir / "decoration" / filename, f"{job_id}-{filename}"
+                        )
+                    graph = image_workflow(reference, prompt, size, seed, prefix, accessory_reference=accessory_reference)
+                else:
+                    graph = video_workflow(reference, prompt, size, seed, prefix)
                 task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"pet-wallpaper-demo/{job_id}/{stage}"))
                 # 提交前落盘实例地址与任务 ID，重启后继续向原实例查询。
                 record = remote[stage] = {"state": "submitting", "provider_id": task_id, "base_url": endpoint}
@@ -270,16 +287,22 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
             await persist_remote(remote)
             return target
 
-        idle = output_dir / "idle.png"
-        if idle_record.get("state") != "complete" or not idle.is_file():
+        image_stage = "portrait" if portrait_only else "idle"
+        image_record = remote.get(image_stage, {})
+        idle = output_dir / f"{image_stage}.png"
+        if image_record.get("state") != "complete" or not idle.is_file():
             photo = None
-            if not idle_record.get("provider_id"):
+            if not image_record.get("provider_id"):
                 photo = await self._upload(base, Path(job["photo_path"]), f"{job_id}-photo.jpg")
-            image_endpoint = idle_record.get("base_url", base)
+            image_endpoint = image_record.get("base_url", base)
             async with self._endpoint_locks[image_endpoint]:
-                await advance("idle", 20)
-                await render(image_endpoint, "idle", "image", IDLE_IMAGE_SEED, idle, photo)
-        reference = remote["idle"].get("output_reference")
+                await advance(image_stage, 20)
+                # 用新任务重试正面照时更换种子，待机图保留原定采样种子。
+                image_seed = video_seed if portrait_only else IDLE_IMAGE_SEED
+                await render(image_endpoint, image_stage, "image", image_seed, idle, photo)
+        if portrait_only:
+            return idle, {}
+        reference = remote.get("idle", {}).get("output_reference")
         # 旧任务没有记录远端成品路径，仍可使用已下载的待机图恢复。
         if not reference and any(not remote.get(stage, {}).get("provider_id") for stage, _, _ in VIDEO_STAGES):
             reference = await self._upload(base, idle, f"{job_id}-idle.png")

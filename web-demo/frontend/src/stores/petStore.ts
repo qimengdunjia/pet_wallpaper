@@ -50,7 +50,8 @@ export function getDefaultPet(): PetProfile | undefined {
 
 export function getAllPets(): PetProfile[] {
   const defaultPet = getDefaultPet();
-  return defaultPet ? [defaultPet, ...petState.pets] : [...petState.pets];
+  const visiblePets = petState.pets.filter((pet) => pet.latest_job?.status !== "cancelled" || pet.active_assets);
+  return defaultPet ? [defaultPet, ...visiblePets] : visiblePets;
 }
 
 export function findPetById(petId: string | null | undefined): PetProfile | undefined {

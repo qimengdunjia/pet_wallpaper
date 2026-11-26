@@ -7,11 +7,11 @@ import fcntl
 import logging
 from dataclasses import replace
 from pathlib import Path
-from shutil import copyfile
 
 from .config import Settings
 from .db import DemoDatabase
-from .media import AssetValidationError, validate_asset_bundle
+from .decoration import prepare_portrait
+from .media import AssetValidationError, inspect_image, validate_asset_bundle
 from .providers import BaseGenerationProvider, ProviderError, build_provider
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,12 @@ class GenerationWorker:
             return
         task = asyncio.create_task(self._run_job(job_id))
         self._tasks[job_id] = task
-        task.add_done_callback(lambda _t, jid=job_id: self._tasks.pop(jid, None))
+
+        def remove_finished(finished: asyncio.Task) -> None:
+            if self._tasks.get(job_id) is finished:
+                self._tasks.pop(job_id)
+
+        task.add_done_callback(remove_finished)
 
     def _get_provider(self, mode: str) -> BaseGenerationProvider:
         if mode not in self._providers:
@@ -94,7 +99,7 @@ class GenerationWorker:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-        active_jobs = [job for job in jobs if job.get("status") not in {"ready", "failed"}]
+        active_jobs = [job for job in jobs if job.get("status") in {"queued", "generating"}]
         if active_jobs:
             await asyncio.gather(
                 *(self._cancel_remote_job(job) for job in active_jobs),
@@ -110,7 +115,7 @@ class GenerationWorker:
     async def _run_job(self, job_id: str) -> None:
         async with self._semaphore:
             job = self.db.get_job_any(job_id)
-            if not job or job["status"] in {"ready", "failed"}:
+            if not job or job["status"] not in {"queued", "generating"}:
                 return
             pet = self.db.get_pet_any(job["pet_id"])
             if not pet:
@@ -130,16 +135,35 @@ class GenerationWorker:
                 self.db.update_job_progress(job_id, status="generating", stage=stage, progress=progress)
 
             try:
-                self.db.update_job_progress(job_id, status="generating", stage="idle", progress=max(job["progress"], 5))
                 # 任务按提交时的供应商执行，切换设置后仍可恢复原任务。
                 mode = job["provider"]
+                portrait_only = job["staged"] and job["decoration"] is None
+                stage = job["stage"] if job["status"] == "generating" else "idle"
+                if portrait_only:
+                    stage = "portrait"
+                self.db.update_job_progress(job_id, status="generating", stage=stage, progress=max(job["progress"], 5))
+                job_runtime["portrait_only"] = portrait_only
+                work_dir.mkdir(parents=True, exist_ok=True)
                 idle_path, action_paths = await self._get_provider(mode).generate(
                     job_runtime, pet, work_dir, persist_remote, update_progress
                 )
+                if portrait_only:
+                    idle_meta = await asyncio.to_thread(inspect_image, idle_path)
+                    generation = job.get("generation_config") or {}
+                    if mode == "comfyui" and generation and (
+                        idle_meta["width"], idle_meta["height"]
+                    ) != (generation["image_width"], generation["image_height"]):
+                        raise AssetValidationError("ComfyUI 正面照分辨率与任务设置不一致")
+                    portrait = work_dir / "portrait.png"
+                    await asyncio.to_thread(prepare_portrait, idle_path, portrait)
+                    self.db.finish_portrait(job_id, self._rel_path(portrait))
+                    return
                 self.db.update_job_progress(job_id, status="generating", stage="validating", progress=96)
                 idle_meta, actions_meta = await asyncio.to_thread(
                     validate_asset_bundle, idle_path, action_paths
                 )
+                if job["staged"] and "idle-video" not in actions_meta:
+                    raise AssetValidationError("装扮任务缺少待机视频")
                 generation = job.get("generation_config") or {}
                 if mode == "comfyui" and generation:
                     if (idle_meta["width"], idle_meta["height"]) != (generation["image_width"], generation["image_height"]):

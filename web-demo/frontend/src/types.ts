@@ -10,9 +10,18 @@ export type RouteView =
   | "home"
   | "onboarding-species"
   | "onboarding-upload"
+  | "onboarding-decoration"
   | "generating"
   | "wallpaper"
   | "settings";
+
+export type DecorationBackground = "cream" | "pink" | "blue" | "lavender";
+export type DecorationAccessory = "none" | "bow-tie" | "bandana" | "glasses" | "santa-hat";
+
+export interface DecorationChoice {
+  background: DecorationBackground;
+  accessory: DecorationAccessory;
+}
 
 export interface GenerationSettings {
   provider: ProviderMode;
@@ -59,12 +68,15 @@ export interface GenerationJob {
   pet_id: string;
   idempotency_key: string;
   provider: string;
-  status: "queued" | "generating" | "ready" | "failed";
+  status: "queued" | "generating" | "awaiting_decoration" | "ready" | "failed" | "cancelled";
   stage: string;
   progress: number;
   version_id: string | null;
   error_message: string | null;
   assets: AssetVersionManifest | null;
+  staged?: boolean; // 是否需要先经过正面照与装扮确认。
+  decoration?: DecorationChoice | null;
+  preview_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -99,6 +111,7 @@ export interface AppConfig {
   mock_controls_enabled: boolean;
   default_mock_delay_seconds: number;
   max_upload_mb: number;
+  decoration_backgrounds?: Record<DecorationBackground, string>;
   transitions: {
     intro: VideoAssetMeta | null;
     loop: VideoAssetMeta | null;

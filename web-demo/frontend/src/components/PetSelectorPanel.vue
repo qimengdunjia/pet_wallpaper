@@ -7,7 +7,7 @@ import selectorChevron from "@/assets/mastergo/selector-chevron.svg";
 import catIllustration from "@/assets/mastergo/cat.png";
 import dogIllustration from "@/assets/mastergo/dog-happy.png";
 import { createIdempotencyKey, submitGeneration } from "@/lib/api";
-import { deletePetProfile, startWaitingBatch, trackJob } from "@/stores/generationStore";
+import { deletePetProfile, needsDecoration, setDecorationBatch, startWaitingBatch, trackJob } from "@/stores/generationStore";
 import PetDeleteConfirmModal from "@/components/PetDeleteConfirmModal.vue";
 import { getPetsBySpecies, upsertPet } from "@/stores/petStore";
 import { closePetSelector, findPetByIdSafe, playerState } from "@/stores/playerHelpers";
@@ -111,6 +111,9 @@ function statusInfo(pet: PetProfile): { text: string; tone: string; selectable: 
     return { text: "默认壁纸", tone: "info", selectable: true };
   }
   const job = pet.latest_job;
+  if (job?.status === "awaiting_decoration") {
+    return { text: "待装扮", tone: "info", selectable: false };
+  }
   if (job && (job.status === "queued" || job.status === "generating")) {
     return { text: `生成中 ${job.progress}%`, tone: "info", selectable: false };
   }
@@ -170,16 +173,30 @@ async function handleRetryPet(pet: PetProfile) {
     const res = await submitGeneration({
       petId: pet.id,
       idempotencyKey: createIdempotencyKey("retry"),
+      retryFromJobId: pet.latest_job?.staged ? pet.latest_job.id : undefined,
       mockDelaySeconds: systemState.config?.mock_controls_enabled ? 1.8 : undefined,
     });
     if (res.pet) upsertPet(res.pet);
     trackJob(res.job);
+    if (needsDecoration(res.job)) {
+      openDecoration(res.job.id);
+      return;
+    }
     closePetSelector();
     startWaitingBatch([res.job.id]);
     setRoute("generating");
   } catch (err) {
     showToast(err instanceof Error ? err.message : "重试失败", "error");
   }
+}
+
+/** 从选择面板恢复指定宠物的装扮任务。 */
+function openDecoration(jobId: string) {
+  if (!guardParkedAction("选择宠物装扮")) return;
+  closePetSelector();
+  systemState.onboardingReturnRoute = "wallpaper";
+  setDecorationBatch([jobId]);
+  setRoute("onboarding-decoration");
 }
 
 function handleAddFromSelector() {
@@ -328,7 +345,14 @@ async function confirmDeletePet() {
           </div>
 
           <button
-            v-if="pet.latest_job?.status === 'failed' && !pet.active_assets"
+            v-if="pet.latest_job?.status === 'awaiting_decoration'"
+            class="btn btn-black btn-sm retry-mini"
+            @click.stop="openDecoration(pet.latest_job.id)"
+          >
+            继续装扮
+          </button>
+          <button
+            v-else-if="pet.latest_job?.status === 'failed' && !pet.active_assets"
             class="btn btn-black btn-sm retry-mini"
             @click.stop="handleRetryPet(pet)"
           >

@@ -2,6 +2,7 @@
 import type {
   AppConfig,
   CurrentWallpaper,
+  DecorationChoice,
   Gender,
   GenerationJob,
   GenerationSettings,
@@ -129,10 +130,14 @@ export async function submitGeneration(input: {
   mockFail?: boolean;
   mockFailStage?: string;
   mockFailMessage?: string;
+  requireDecoration?: boolean;
+  retryFromJobId?: string;
 }): Promise<{ reused: boolean; job: GenerationJob; pet?: PetProfile }> {
   const form = new FormData();
   form.append("pet_id", input.petId);
   form.append("idempotency_key", input.idempotencyKey);
+  if (input.requireDecoration) form.append("require_decoration", "true");
+  if (input.retryFromJobId) form.append("retry_from_job_id", input.retryFromJobId);
   if (input.photo) {
     const filename = input.photo instanceof File ? input.photo.name : "pet-photo.jpg";
     form.append("photo", input.photo, filename);
@@ -149,6 +154,28 @@ export async function submitGeneration(input: {
     method: "POST",
     body: form,
   });
+}
+
+/** 一次提交 choices 中各宠物的选择，返回进入动画生成的任务。 */
+export async function confirmDecorations(
+  choices: (DecorationChoice & { job_id: string })[],
+): Promise<GenerationJob[]> {
+  const { jobs } = await requestJson<{ jobs: GenerationJob[] }>("/api/generations/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ choices }),
+  });
+  return jobs;
+}
+
+/** 取消给定的未确认任务，返回其最新状态。 */
+export async function cancelDecorations(jobIds: string[]): Promise<GenerationJob[]> {
+  const { jobs } = await requestJson<{ jobs: GenerationJob[] }>("/api/generations/cancel-decoration", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job_ids: jobIds }),
+  });
+  return jobs;
 }
 
 export async function fetchGenerations(): Promise<GenerationJob[]> {

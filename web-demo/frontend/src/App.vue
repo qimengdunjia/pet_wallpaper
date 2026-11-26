@@ -9,6 +9,9 @@ import {
 } from "@/lib/api";
 import { preloadAssetVideosBackground, preloadTransitionVideos } from "@/lib/preload";
 import {
+  needsDecoration,
+  readDecorationBatch,
+  setDecorationBatch,
   startWaitingBatch,
   stopAllPolling,
   trackJob,
@@ -28,6 +31,7 @@ import SystemAlertOverlay from "@/components/SystemAlertOverlay.vue";
 import SystemTopBar from "@/components/SystemTopBar.vue";
 import HomeReturnView from "@/views/HomeReturnView.vue";
 import LoadingTransitionView from "@/views/LoadingTransitionView.vue";
+import OnboardingDecorationView from "@/views/OnboardingDecorationView.vue";
 import OnboardingSpeciesView from "@/views/OnboardingSpeciesView.vue";
 import OnboardingUploadView from "@/views/OnboardingUploadView.vue";
 import SettingsView from "@/views/SettingsView.vue";
@@ -55,7 +59,12 @@ async function bootstrap() {
       const cached = jobsById.get(latest.id);
       if (!cached || latest.updated_at > cached.updated_at) jobsById.set(latest.id, latest);
     }
-    const activeJobs = [...jobsById.values()].filter((j) => j.status === "queued" || j.status === "generating");
+    const activeJobs = [...jobsById.values()].filter((job) =>
+      !needsDecoration(job) && (job.status === "queued" || job.status === "generating"),
+    );
+    const unfinishedPortraits = [...jobsById.values()].filter((job) =>
+      needsDecoration(job) && pets.some((pet) => pet.latest_job_id === job.id),
+    );
     for (const job of jobsById.values()) {
       trackJob(job);
     }
@@ -70,13 +79,31 @@ async function bootstrap() {
       }
     };
 
+    const baseline = currentWallpaper ?? config.default_wallpaper;
+    if (baseline) {
+      setDisplayedWallpaper(baseline.pet_id, baseline.version_id, baseline.assets);
+      preloadAssetVideosBackground(baseline.assets);
+    }
+
+    if (hashRoute === "onboarding-decoration") {
+      const storedIds = readDecorationBatch();
+      const recoverable = storedIds.length
+        ? unfinishedPortraits.filter((job) => storedIds.includes(job.id))
+        : unfinishedPortraits.slice(0, 2);
+      if (recoverable.length) {
+        setDecorationBatch(recoverable.map((job) => job.id));
+        systemState.onboardingReturnRoute = baseline ? "wallpaper" : "welcome";
+        navigate("onboarding-decoration");
+        return;
+      }
+      const confirmed = activeJobs.filter((job) => storedIds.includes(job.id));
+      if (confirmed.length) {
+        startWaitingBatch(confirmed.map((job) => job.id));
+        navigate("generating");
+        return;
+      }
+    }
     if (currentWallpaper) {
-      setDisplayedWallpaper(
-        currentWallpaper.pet_id,
-        currentWallpaper.version_id,
-        currentWallpaper.assets,
-      );
-      preloadAssetVideosBackground(currentWallpaper.assets);
       if (hashRoute === "home") {
         navigate("home");
       } else if ((hashRoute === "generating" || hashRoute === "settings") && activeJobs.length > 0) {
@@ -89,9 +116,6 @@ async function bootstrap() {
       startWaitingBatch(activeJobs.map((j) => j.id));
       navigate("generating");
     } else if (config.default_wallpaper) {
-      const defWp = config.default_wallpaper;
-      setDisplayedWallpaper(defWp.pet_id, defWp.version_id, defWp.assets);
-      preloadAssetVideosBackground(defWp.assets);
       if (hashRoute === "welcome") {
         navigate("welcome");
       } else if (hashRoute === "home") {
@@ -124,6 +148,7 @@ function handleHashChange() {
     hash === "home" ||
     hash === "onboarding-species" ||
     hash === "onboarding-upload" ||
+    hash === "onboarding-decoration" ||
     hash === "generating" ||
     hash === "wallpaper" ||
     hash === "settings"
@@ -176,6 +201,7 @@ onBeforeUnmount(() => {
       <HomeReturnView v-else-if="systemState.route === 'home'" />
       <OnboardingSpeciesView v-else-if="systemState.route === 'onboarding-species'" />
       <OnboardingUploadView v-else-if="systemState.route === 'onboarding-upload'" />
+      <OnboardingDecorationView v-else-if="systemState.route === 'onboarding-decoration'" />
       <LoadingTransitionView v-else-if="systemState.route === 'generating'" />
       <WallpaperStageView v-else-if="systemState.route === 'wallpaper'" />
       <SettingsView v-else-if="systemState.route === 'settings'" />

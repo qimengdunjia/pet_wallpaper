@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import re
 import shutil
@@ -15,10 +16,12 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from .config import Settings
 from .db import DemoDatabase, GenerationKeyConflict
+from .decoration import BACKGROUNDS, THUMBNAILS, Accessory, Background, Decoration, compose_decoration
 from .generation_settings import GenerationSettings, SettingsAccess, SettingsLogin, default_generation_settings
 from .media import PhotoValidationError, inspect_image, inspect_video, normalize_photo
 from .providers import BaseGenerationProvider
@@ -51,6 +54,24 @@ class UpdatePetRequest(BaseModel):
 class CurrentWallpaperRequest(BaseModel):
     pet_id: str = Field(min_length=1, max_length=64)
     version_id: str = Field(min_length=1, max_length=64)
+
+
+class ConfirmDecorationItem(Decoration):
+    """为一只宠物指定待确认的任务 ID、背景与配饰。"""
+
+    job_id: str = Field(min_length=1, max_length=64)
+
+
+class ConfirmDecorationsRequest(BaseModel):
+    """一次确认单宠或双宠的装扮选择。"""
+
+    choices: list[ConfirmDecorationItem] = Field(min_length=1, max_length=2)
+
+
+class CancelDecorationsRequest(BaseModel):
+    """提交要取消的正面照任务列表。"""
+
+    job_ids: list[str] = Field(min_length=1, max_length=2)
 
 
 def resolve_session_id(request: Request) -> str:
@@ -122,6 +143,12 @@ def serialize_job(job: dict, db: DemoDatabase, session_id: str = "default") -> d
         "progress": job["progress"],
         "version_id": job["version_id"],
         "error_message": job["error_message"],
+        "staged": job["staged"],
+        "decoration": job["decoration"],
+        "preview_url": (
+            f"/api/media/generations/{job['id']}/preview{_session_suffix(session_id)}"
+            if job["portrait_path"] and job["status"] != "cancelled" else None
+        ),
         "assets": assets,
         "created_at": job["created_at"],
         "updated_at": job["updated_at"],
@@ -297,6 +324,7 @@ def create_app(
             "seat_key_url": SEAT_KEY_URL,
             "default_mock_delay_seconds": config.mock_delay_seconds,
             "max_upload_mb": config.max_upload_bytes // 1024 // 1024,
+            "decoration_backgrounds": BACKGROUNDS,
             "transitions": {
                 "intro": {**intro, "url": "/api/assets/transitions/intro-3s.mp4"} if intro else None,
                 "loop": {**loop, "url": "/api/assets/transitions/chase-loop-7s.mp4"} if loop else None,
@@ -371,6 +399,16 @@ def create_app(
             raise HTTPException(404, "示例照片不存在")
         return FileResponse(target, media_type="image/jpeg")
 
+    @app.get("/api/assets/decoration/{asset}")
+    def get_decoration_thumbnail(asset: str):
+        """按选项标识读取原稿中的透明缩略图。"""
+        if asset not in THUMBNAILS:
+            raise HTTPException(404, "装扮素材不存在")
+        target = config.assets_dir / "decoration" / f"{asset}.webp"
+        if not target.is_file():
+            raise HTTPException(404, "装扮素材不存在")
+        return FileResponse(target, media_type="image/webp")
+
     @app.get("/api/pets")
     def list_pets(request: Request):
         session_id = resolve_session_id(request)
@@ -433,6 +471,8 @@ def create_app(
         mock_fail: bool = Form(False),
         mock_fail_stage: str | None = Form(None),
         mock_fail_message: str | None = Form(None),
+        require_decoration: bool = Form(False),
+        retry_from_job_id: str | None = Form(None),
     ):
         """存档照片并异步发起生成任务；相同幂等键返回原任务而不重复建单。"""
         session_id = resolve_session_id(request)
@@ -462,9 +502,20 @@ def create_app(
         if existing_job:
             return reuse_job(existing_job)
 
+        retry_job = None
+        if retry_from_job_id:
+            retry_job = db.get_job(session_id, retry_from_job_id)
+            if not retry_job or retry_job["pet_id"] != pet_id:
+                raise HTTPException(404, "原生成任务不存在")
+            if retry_job["status"] != "failed" or photo is not None:
+                raise HTTPException(409, "只能使用原照片重试失败的生成任务")
+            if pet["latest_job_id"] != retry_job["id"]:
+                raise HTTPException(409, "该宠物已有更新的生成任务")
+
         # 读取并先存档照片（未传新照片时，允许复用该宠物上次已存档的原照发起重试）
         saved_rel_photo: str
         new_upload_path: Path | None = None
+        stored_photo = retry_job["photo_path"] if retry_job else pet.get("original_photo_path")
         if photo is not None:
             try:
                 raw_bytes = await photo.read(config.max_upload_bytes + 1)
@@ -481,16 +532,16 @@ def create_app(
             upload_dir.mkdir(parents=True, exist_ok=True)
             new_upload_path = upload_dir / upload_name
             saved_rel_photo = f"uploads/{pet_id}/{upload_name}"
-        elif pet.get("original_photo_path"):
-            existing_file = worker.resolve_data_path(pet["original_photo_path"])
+        elif stored_photo:
+            existing_file = worker.resolve_data_path(stored_photo)
             if not existing_file.is_file():
                 raise HTTPException(422, "原宠物照片已丢失，请重新上传一张清晰正面照")
-            saved_rel_photo = pet["original_photo_path"]
+            saved_rel_photo = stored_photo
         else:
             raise HTTPException(422, "请上传一张清晰的宠物正面照")
 
         selected = generation_settings()
-        mode = selected["provider"]
+        mode = retry_job["provider"] if retry_job else selected["provider"]
         mock_options: dict = {}
         if mode == "mock" and config.mock_controls_enabled:
             if mock_delay_seconds is not None:
@@ -510,11 +561,14 @@ def create_app(
                 provider=mode,
                 photo_path=saved_rel_photo,
                 mock_options=mock_options,
-                generation_config={
+                generation_config=retry_job["generation_config"] if retry_job else {
                     "prompts": selected["prompts"][pet["species"]],
                     **{key: selected[key] for key in ("image_width", "image_height", "video_width", "video_height")},
                     **({"comfyui_base_url": config.comfyui_base_url} if mode == "comfyui" else {}),
                 } if mode != "mock" else None,
+                staged=retry_job["staged"] if retry_job else require_decoration,
+                portrait_path=retry_job["portrait_path"] if retry_job else None,
+                decoration=retry_job["decoration"] if retry_job else None,
             )
         except Exception as exc:
             if new_upload_path is not None:
@@ -532,6 +586,54 @@ def create_app(
             },
             status_code=202,
         )
+
+    @app.post("/api/generations/confirm")
+    async def confirm_decorations(request: Request, body: ConfirmDecorationsRequest):
+        """确认会话内的装扮，开始排队生成待机图和动画，返回最新状态。"""
+        session_id = resolve_session_id(request)
+        choices = {item.job_id: item.model_dump(exclude={"job_id"}) for item in body.choices}
+        if len(choices) != len(body.choices):
+            raise HTTPException(422, "请为每个任务提供一份装扮选择")
+        try:
+            jobs = db.confirm_decorations(session_id, choices)
+        except (LookupError, ValueError) as exc:
+            raise HTTPException(404 if isinstance(exc, LookupError) else 409, str(exc)) from exc
+        for job in jobs:
+            if job["status"] == "queued":
+                worker.enqueue(job["id"])
+        return {"jobs": [serialize_job(job, db, session_id) for job in jobs]}
+
+    @app.post("/api/generations/cancel-decoration")
+    async def cancel_decorations(request: Request, body: CancelDecorationsRequest):
+        """取消尚未确认装扮的任务，返回取消后的任务状态。"""
+        session_id = resolve_session_id(request)
+        try:
+            jobs, active = db.cancel_decoration_jobs(session_id, list(dict.fromkeys(body.job_ids)))
+        except (LookupError, ValueError) as exc:
+            raise HTTPException(404 if isinstance(exc, LookupError) else 409, str(exc)) from exc
+        await worker.cancel_jobs(active)
+        return {"jobs": [serialize_job(job, db, session_id) for job in jobs]}
+
+    @app.get("/api/media/generations/{job_id}/preview")
+    def get_decoration_preview(
+        request: Request, job_id: str, background: Background = "blue", accessory: Accessory = "none",
+    ):
+        """读取当前会话的正面照并即时合成预览，不提交新的生成任务。"""
+        job = db.get_job(resolve_session_id(request), job_id)
+        if not job or not job["portrait_path"] or job["status"] == "cancelled":
+            raise HTTPException(404, "正面照尚未就绪")
+        path = worker.resolve_data_path(job["portrait_path"])
+        if not path.is_file():
+            raise HTTPException(404, "正面照文件不存在")
+        with Image.open(path) as source:
+            # 全屏布局仍只需在左列预览，缩小长边避免每次选择传输整张原图；正面照不叠加配饰预览。
+            source.thumbnail((960, 720), Image.Resampling.LANCZOS)
+            image = compose_decoration(source.convert("RGBA"), config.assets_dir, Decoration(
+                background=background, accessory="none",
+            ))
+        buffer = io.BytesIO()
+        image.save(buffer, format="WEBP", quality=91)
+        return Response(buffer.getvalue(), media_type="image/webp")
 
     @app.get("/api/generations")
     def list_generations(request: Request):

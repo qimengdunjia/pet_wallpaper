@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -14,6 +15,79 @@ from app.config import Settings
 
 PRIMARY = "http://primary:8188"
 SECONDARY = "http://secondary:8189"
+
+
+def test_confirmed_decoration_uses_original_photo_for_idle_and_idle_for_all_videos(tmp_path):
+    """断言装扮任务的正面照不会被作为待机图的输入，视频统一引用最终待机图。"""
+    photo = tmp_path / "original.jpg"
+    photo.write_bytes(b"user-original-photo")
+    assets_dir = Path(__file__).resolve().parents[2] / "assets"
+
+    async def run():
+        submissions = {}
+
+        async def handle(request):
+            path = request.url.path
+            if path == "/upload/image":
+                if b"user-original-photo" in request.content:
+                    return httpx.Response(200, json={"name": "original.jpg"})
+                assert b"bow-tie.webp" in request.content
+                return httpx.Response(200, json={"name": "bow-tie.webp"})
+            if path == "/prompt":
+                payload = json.loads(request.content)
+                graph = payload["prompt"]
+                stage = graph[OUTPUT_NODE]["inputs"]["filename_prefix"].rsplit("/", 1)[-1]
+                submissions[payload["prompt_id"]] = stage
+                conditioning = graph["conditioning"]["inputs"]
+                if stage in {"portrait", "idle"}:
+                    assert graph["reference"]["inputs"]["image"] == "original.jpg"
+                    assert conditioning["images.image_1"] == ["reference", 0]
+                    if stage == "portrait":
+                        assert "images.image_2" not in conditioning
+                        assert "#00FF00" not in conditioning["prompt"]
+                        assert "#000000" not in conditioning["prompt"]
+                        assert "#A3CEF7" in conditioning["prompt"]
+                    else:
+                        assert conditioning["images.image_2"] == ["accessory_reference", 0]
+                        assert graph["accessory_reference"]["inputs"]["image"] == "bow-tie.webp"
+                        assert "#FADEE4" in conditioning["prompt"]
+                else:
+                    assert graph["reference"]["inputs"]["image"] == "idle.png [output]"
+                    assert conditioning["first_frame"] == conditioning["last_frame"]
+                return httpx.Response(200, json={"prompt_id": payload["prompt_id"]})
+            if path == "/view":
+                return httpx.Response(200, content=b"media")
+            task_id = path.rsplit("/", 1)[-1]
+            stage = submissions[task_id]
+            filename = stage + (".png" if stage in {"portrait", "idle"} else ".mp4")
+            return httpx.Response(200, json={task_id: {"outputs": {
+                OUTPUT_NODE: {"images": [{"type": "output", "filename": filename}]},
+            }}})
+
+        remote = {}
+
+        async def persist(snapshot):
+            remote.update(snapshot)
+
+        async def progress(_stage, _value):
+            pass
+
+        settings = Settings(comfyui_base_url=PRIMARY, assets_dir=assets_dir)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            provider = ComfyUIGenerationProvider(settings, client=client)
+            job = {"id": "abcdef123456", "photo_path": str(photo), "remote_tasks": remote}
+            output = tmp_path / "output"
+            portrait, videos = await provider.generate({**job, "portrait_only": True}, {"species": "dog"}, output, persist, progress)
+            assert portrait.name == "portrait.png"
+            assert not videos
+            assert list(submissions.values()) == ["portrait"]
+            idle, videos = await provider.generate({
+                **job, "decoration": {"background": "pink", "accessory": "bow-tie"},
+            }, {"species": "dog"}, output, persist, progress)
+            assert idle.name == "idle.png"
+            assert set(videos) == {"idle-video", "left", "center", "right"}
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("fast_host", ["primary", "secondary"])

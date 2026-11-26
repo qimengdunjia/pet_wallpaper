@@ -11,10 +11,13 @@ def _node(class_type: str, **inputs) -> dict:
     return {"class_type": class_type, "inputs": inputs}
 
 
-def image_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int, prefix: str) -> dict:
-    """以服务器参考图、提示词、尺寸、种子和输出前缀，返回待机图生成图。"""
+def image_workflow(
+    reference: str, prompt: str, size: tuple[int, int], seed: int, prefix: str,
+    *, accessory_reference: str | None = None,
+) -> dict:
+    """组装生图节点，reference 为用户原照，accessory_reference 为可选装饰参考图。"""
     width, height = size
-    return {
+    graph = {
         "reference": _node("LoadImage", image=reference),
         "model": _node("UNETLoader", unet_name="minimax_h3_image_pruned_int8_convrot.safetensors", weight_dtype="default"),
         "clip": _node("CLIPLoader", clip_name=CLIP, type="minimax", device="default"),
@@ -29,6 +32,10 @@ def image_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int
         "decode": _node("VAEDecode", samples=["sample", 0], vae=["vae", 0]),
         OUTPUT_NODE: _node("SaveImage", images=["decode", 0], filename_prefix=prefix),
     }
+    if accessory_reference:
+        graph["accessory_reference"] = _node("LoadImage", image=accessory_reference)
+        graph["conditioning"]["inputs"]["images.image_2"] = ["accessory_reference", 0]
+    return graph
 
 
 def video_workflow(reference: str, prompt: str, size: tuple[int, int], seed: int, prefix: str) -> dict:

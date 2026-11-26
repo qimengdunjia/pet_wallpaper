@@ -8,7 +8,7 @@ import profileCardForeground from "@/assets/mastergo/profile-card-foreground.svg
 import profileCardWordmark from "@/assets/mastergo/profile-card-wordmark.svg";
 import uploadTipDog from "@/assets/mastergo/upload-tip-dog.png";
 import { createIdempotencyKey, createPet, submitGeneration, updatePet } from "@/lib/api";
-import { startWaitingBatch, trackJob } from "@/stores/generationStore";
+import { setDecorationBatch, trackJob } from "@/stores/generationStore";
 import { upsertPet } from "@/stores/petStore";
 import { guardParkedAction, setRoute, showToast, systemState } from "@/stores/systemStore";
 import type { Gender, Species } from "@/types";
@@ -164,10 +164,10 @@ function getMockParamsForSpecies(species: Species) {
   }
 }
 
-/** 提交当前表单中未接受的任务；全部确认后打开生成等待页。 */
+/** 提交表单中尚未受理的正面照任务，全部受理后打开装扮页。 */
 async function handleSubmit() {
   if (submitting.value || !allPhotosReady.value) return;
-  if (!guardParkedAction("提交生成壁纸")) return;
+  if (!guardParkedAction("生成宠物正面照")) return;
   const routeRevision = systemState.routeRevision;
   const isCurrent = () => systemState.routeRevision === routeRevision;
   submitting.value = true;
@@ -201,6 +201,7 @@ async function handleSubmit() {
         petId: draft.petId,
         idempotencyKey: draft.idempotencyKey,
         photo: draft.file,
+        requireDecoration: true,
         ...mockParams,
       });
       if (res.pet) upsertPet(res.pet);
@@ -209,8 +210,8 @@ async function handleSubmit() {
       jobIds.push(draft.jobId);
       if (!isCurrent()) return;
     }
-    startWaitingBatch(jobIds);
-    setRoute("generating");
+    setDecorationBatch(jobIds);
+    setRoute("onboarding-decoration");
   } catch (err) {
     if (isCurrent()) showToast(err instanceof Error ? err.message : "提交失败，请重试", "error", 4200);
   } finally {
@@ -365,7 +366,7 @@ function handleBack() {
         data-testid="start-generation-btn"
         @click="handleSubmit"
       >
-        {{ submitting ? "正在提交..." : "开始生成" }}
+        {{ submitting ? "正在提交..." : "生成正面照" }}
       </button>
     </div>
   </section>

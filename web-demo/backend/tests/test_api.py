@@ -54,16 +54,71 @@ def _make_settings(tmp_path: Path, **overrides) -> Settings:
     )
 
 
-def _wait_job(client: TestClient, job_id: str, headers: dict | None = None, timeout: float = 8.0) -> dict:
+def _wait_job(
+    client: TestClient, job_id: str, headers: dict | None = None, timeout: float = 8.0,
+    *, statuses: tuple[str, ...] = ("ready", "failed"),
+) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         resp = client.get(f"/api/generations/{job_id}", headers=headers or {})
         assert resp.status_code == 200
         job = resp.json()["job"]
-        if job["status"] in {"ready", "failed"}:
+        if job["status"] in statuses:
             return job
         time.sleep(0.05)
     raise AssertionError(f"任务 {job_id} 在 {timeout}s 内未结束")
+
+
+def test_decoration_waits_for_confirmation_across_restart(tmp_path: Path):
+    """验证双宠确认的原子性、正面照预览隔离、暂停恢复、取消和四视频发布。"""
+    settings = _make_settings(tmp_path)
+    chosen = {"background": "pink", "accessory": "bow-tie"}
+    with TestClient(create_app(settings)) as client:
+        job_ids = []
+        for species in ("cat", "dog"):
+            pet_id = client.post("/api/pets", json={"species": species}).json()["pet"]["id"]
+            response = client.post("/api/generations", data={
+                "pet_id": pet_id, "idempotency_key": f"portrait-{species}", "require_decoration": "true",
+            }, files={"photo": ("photo.jpg", _make_jpeg_bytes(), "image/jpeg")})
+            assert response.status_code == 202
+            job_id = response.json()["job"]["id"]
+            job_ids.append(job_id)
+            job = _wait_job(client, job_id, statuses=("awaiting_decoration", "failed"))
+            assert job["status"] == "awaiting_decoration", job
+            assert not job["assets"]
+            assert not list((settings.data_dir / "versions" / job_id).glob("*.mp4"))
+
+    with TestClient(create_app(settings)) as client:
+        first, second = job_ids
+        job = client.get(f"/api/generations/{first}").json()["job"]
+        assert job["status"] == "awaiting_decoration"
+        preview_url = job["preview_url"]
+        assert client.get(preview_url, headers={"X-Demo-Session": "other"}).status_code == 404
+        preview = client.get(preview_url, params=chosen)
+        assert preview.status_code == 200
+        assert preview.headers["content-type"] == "image/webp"
+        with Image.open(io.BytesIO(preview.content)) as image:
+            assert all(abs(a - b) < 6 for a, b in zip(image.getpixel((0, 0)), (250, 222, 228)))
+
+        assert client.post("/api/generations/confirm", json={"choices": [
+            {"job_id": first, **chosen}, {"job_id": "missing", **chosen},
+        ]}).status_code == 404
+        assert client.get(f"/api/generations/{first}").json()["job"]["status"] == "awaiting_decoration"
+        assert client.post("/api/generations/cancel-decoration", json={"job_ids": [second]}).json()[
+            "jobs"
+        ][0]["status"] == "cancelled"
+        body = {"choices": [{"job_id": first, **chosen}]}
+        assert client.post("/api/generations/confirm", json=body).status_code == 200
+        assert client.post("/api/generations/confirm", json=body).status_code == 200
+        assert client.post("/api/generations/confirm", json={
+            "choices": [{"job_id": first, **chosen, "accessory": "glasses"}],
+        }).status_code == 409
+        job = _wait_job(client, first)
+        assert job["status"] == "ready", job
+        assert job["decoration"] == chosen
+        assert job["assets"]["idle_video"]
+        assert set(job["assets"]["actions"]) == {"left", "center", "right"}
+        assert not list((settings.data_dir / "versions" / second).glob("*.mp4"))
 
 
 def test_settings_require_password_and_survive_restart(tmp_path: Path):
@@ -727,3 +782,21 @@ def test_delete_comfyui_pet_interrupts_remote_task(tmp_path: Path):
         assert interrupt_payloads == [{"prompt_id": submitted_ids[0]}]
         assert not (settings.data_dir / "uploads" / pet_id).exists()
         assert not (settings.data_dir / "versions" / job_id).exists()
+
+
+def test_prepare_portrait_accepts_opaque_image_without_green_screen(tmp_path: Path):
+    """确认正面照不做绿幕抠图，非绿幕的实色背景原图可直接保存并用于预览。"""
+    from app.decoration import Decoration, compose_decoration, prepare_portrait
+
+    source = tmp_path / "source.png"
+    target = tmp_path / "portrait.png"
+    Image.new("RGB", (64, 48), (245, 245, 239)).save(source, format="PNG")
+
+    prepare_portrait(source, target)
+
+    with Image.open(target) as saved:
+        assert saved.format == "PNG"
+        assert saved.mode == "RGBA"
+        assert saved.getpixel((0, 0)) == (245, 245, 239, 255)
+        preview = compose_decoration(saved, Path(__file__).resolve().parents[2] / "assets", Decoration())
+        assert preview.getpixel((0, 0)) == (245, 245, 239)

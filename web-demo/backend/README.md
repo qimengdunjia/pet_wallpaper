@@ -38,4 +38,10 @@ ssh -N -L 127.0.0.1:18188:127.0.0.1:8188 z890ud
 ssh -N -L 127.0.0.1:18188:127.0.0.1:8188 -L 127.0.0.1:18189:127.0.0.1:8189 z890ud
 ```
 
-可灵需在 `web-demo/backend/.env` 中配置 `KLING_API_KEY`。可灵使用待机图和三个交互提示词。待机视频提示词和可编辑分辨率用于 ComfyUI。设置页保存后立即作用于新任务，同时保存在 SQLite 中，重启后继续生效。`DEMO_PROVIDER` 用于首次保存之前的初始模式。
+可灵需在 `web-demo/backend/.env` 中配置 `KLING_API_KEY`。通过装扮流程提交的可灵任务会生成待机和三个交互视频。可编辑分辨率用于 ComfyUI。设置页保存后立即作用于新任务，同时保存在 SQLite 中，重启后继续生效。`DEMO_PROVIDER` 用于首次保存之前的初始模式。
+
+## 装扮流程
+
+前端上传原照时向 `POST /api/generations` 传入 `require_decoration=true`。正面照生成后，任务进入 `awaiting_decoration`，前端用 `preview_url` 和选项参数获取合成预览。
+
+`POST /api/generations/confirm` 接收一至两只宠物各自的 `job_id`、`background` 和 `accessory`。后端将该批次的选择一并保存，使用原照和选定配饰的参考图生成待机图，再由待机图生成四段视频。相同选择重复确认会返回现有任务。确认前可用 `POST /api/generations/cancel-decoration` 取消任务，`job_ids` 为待取消任务 ID。已确认任务失败后可通过 `retry_from_job_id` 复用原照和装扮选择。

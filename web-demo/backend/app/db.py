@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
     remote_tasks_json TEXT NOT NULL DEFAULT '{}',
     mock_options_json TEXT NOT NULL DEFAULT '{}',
     generation_config_json TEXT NOT NULL DEFAULT '{}',
+    staged INTEGER NOT NULL DEFAULT 0,
+    portrait_path TEXT,
+    decoration_json TEXT,
     version_id TEXT,
     error_message TEXT,
     created_at TEXT NOT NULL,
@@ -104,19 +107,26 @@ def _row_to_pet(row: sqlite3.Row) -> dict:
 
 
 def _row_to_job(row: sqlite3.Row) -> dict:
+    # 等待装扮时仍占用同一个任务 ID，独立阶段避免改写旧 SQLite 的状态约束。
+    public_status = {"decoration": "awaiting_decoration", "cancelled": "cancelled"}.get(
+        row["stage"], row["status"]
+    )
     return {
         "id": row["id"],
         "session_id": row["session_id"],
         "pet_id": row["pet_id"],
         "idempotency_key": row["idempotency_key"],
         "provider": row["provider"],
-        "status": row["status"],
+        "status": public_status,
         "stage": row["stage"],
         "progress": row["progress"],
         "photo_path": row["photo_path"],
         "remote_tasks": json.loads(row["remote_tasks_json"]),
         "mock_options": json.loads(row["mock_options_json"]),
         "generation_config": json.loads(row["generation_config_json"]),  # 提交时冻结的生成参数。
+        "staged": bool(row["staged"]),  # 旧任务仍走原有的一次生成流程。
+        "portrait_path": row["portrait_path"],
+        "decoration": json.loads(row["decoration_json"]) if row["decoration_json"] else None,
         "version_id": row["version_id"],
         "error_message": row["error_message"],
         "created_at": row["created_at"],
@@ -158,8 +168,14 @@ class DemoDatabase:
         with self._lock:
             self._conn.executescript(SCHEMA_SQL)
             job_columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(generation_jobs)")}
-            if "generation_config_json" not in job_columns:
-                self._conn.execute("ALTER TABLE generation_jobs ADD COLUMN generation_config_json TEXT NOT NULL DEFAULT '{}'")
+            for name, definition in (
+                ("generation_config_json", "TEXT NOT NULL DEFAULT '{}'"),
+                ("staged", "INTEGER NOT NULL DEFAULT 0"),
+                ("portrait_path", "TEXT"),
+                ("decoration_json", "TEXT"),
+            ):
+                if name not in job_columns:
+                    self._conn.execute(f"ALTER TABLE generation_jobs ADD COLUMN {name} {definition}")
 
     def get_generation_settings(self) -> dict | None:
         """读取管理员保存的生成设置；尚未保存时返回 None。"""
@@ -303,8 +319,12 @@ class DemoDatabase:
         photo_path: str,
         mock_options: dict | None = None,
         generation_config: dict | None = None,
+        *,
+        staged: bool = False,
+        portrait_path: str | None = None,
+        decoration: dict | None = None,
     ) -> dict:
-        """为指定会话和宠物保存照片引用、供应商、模拟选项及生成参数快照，返回排队任务。
+        """保存会话、宠物、照片和生成参数，返回排队任务；重试可传入已有正面照与装扮。
 
         幂等键已存在时抛出 GenerationKeyConflict，保留原任务及宠物档案。
         """
@@ -315,9 +335,10 @@ class DemoDatabase:
                 """
                 INSERT INTO generation_jobs (
                     id, session_id, pet_id, idempotency_key, provider, status, stage, progress,
-                    photo_path, remote_tasks_json, mock_options_json, generation_config_json, created_at, updated_at
+                    photo_path, remote_tasks_json, mock_options_json, generation_config_json,
+                    staged, portrait_path, decoration_json, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, 'queued', 'queued', 0, ?, '{}', ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'queued', 'queued', 0, ?, '{}', ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id, idempotency_key) DO NOTHING
                 """,
                 (
@@ -329,6 +350,9 @@ class DemoDatabase:
                     photo_path,
                     json.dumps(mock_options or {}, ensure_ascii=False),
                     json.dumps(generation_config or {}, ensure_ascii=False),
+                    int(staged),
+                    portrait_path,
+                    json.dumps(decoration) if decoration is not None else None,
                     ts,
                     ts,
                 ),
@@ -368,9 +392,57 @@ class DemoDatabase:
     def list_incomplete_jobs(self) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM generation_jobs WHERE status IN ('queued', 'generating') ORDER BY created_at ASC"
+                "SELECT * FROM generation_jobs WHERE status IN ('queued', 'generating') "
+                "AND stage != 'decoration' ORDER BY created_at ASC"
             ).fetchall()
         return [_row_to_job(r) for r in rows]
+
+    def finish_portrait(self, job_id: str, portrait_path: str) -> None:
+        """为 job_id 保存已验收的正面照路径，并暂停至用户确认装扮。"""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE generation_jobs SET portrait_path = ?, stage = 'decoration', progress = 100, updated_at = ? "
+                "WHERE id = ? AND status = 'generating'",
+                (portrait_path, now_iso(), job_id),
+            )
+
+    def confirm_decorations(self, session_id: str, choices: dict[str, dict]) -> list[dict]:
+        """原子确认一个会话内的整批装扮，返回确认后的任务；相同选择可重复提交。"""
+        with self._lock, self._conn:
+            for job_id, decoration in choices.items():
+                job = self.get_job(session_id, job_id)
+                if not job:
+                    raise LookupError("生成任务不存在")
+                if job["decoration"] == decoration:
+                    continue
+                if job["status"] != "awaiting_decoration":
+                    raise ValueError("任务未等待确认，或已确认其他装扮")
+                self._conn.execute(
+                    "UPDATE generation_jobs SET decoration_json = ?, status = 'queued', stage = 'queued', "
+                    "progress = 0, updated_at = ? WHERE id = ?",
+                    (json.dumps(decoration), now_iso(), job_id),
+                )
+            return [self.get_job(session_id, job_id) for job_id in choices]
+
+    def cancel_decoration_jobs(self, session_id: str, job_ids: list[str]) -> tuple[list[dict], list[dict]]:
+        """取消尚未确认的正面照任务，返回新状态及取消前仍需通知供应商的任务。"""
+        active = []
+        with self._lock, self._conn:
+            for job_id in job_ids:
+                job = self.get_job(session_id, job_id)
+                if not job:
+                    raise LookupError("生成任务不存在")
+                if not job["staged"] or job["decoration"] is not None:
+                    raise ValueError("已提交动画生成的任务不能在装扮页取消")
+                if job["status"] == "cancelled":
+                    continue
+                if job["status"] in {"queued", "generating"}:
+                    active.append(job)
+                self._conn.execute(
+                    "UPDATE generation_jobs SET status = 'failed', stage = 'cancelled', "
+                    "error_message = NULL, updated_at = ? WHERE id = ?", (now_iso(), job_id)
+                )
+            return [self.get_job(session_id, job_id) for job_id in job_ids], active
 
     def update_job_progress(
         self,

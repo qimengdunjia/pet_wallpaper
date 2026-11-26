@@ -24,7 +24,8 @@ import { useClock } from "@/stores/useClock";
 const clockText = useClock();
 const isImmersive = computed(() => isWallpaperImmersive());
 const showReferenceStatus = computed(
-  () => !systemState.drawerOpen && (systemState.route === "onboarding-upload" || playerState.selectorOpen),
+  () => !systemState.drawerOpen &&
+    (systemState.route === "onboarding-upload" || systemState.route === "onboarding-decoration" || playerState.selectorOpen),
 );
 const canEnterImmersive = computed(
   () => systemState.route === "wallpaper" && !playerState.selectorOpen,
@@ -46,6 +47,8 @@ const routeLabel = computed(() => {
       return "选择宠物类型";
     case "onboarding-upload":
       return "完善宠物信息";
+    case "onboarding-decoration":
+      return "宠物装扮";
     case "generating":
       return "生成过场";
     case "wallpaper":

@@ -215,6 +215,7 @@ function stageLabel(stage: string): string {
   const map: Record<string, string> = {
     queued: "排队中",
     idle: "生成正面待机图",
+    "idle-video": "生成待机动画",
     left: "生成左热区动作",
     center: "生成中热区动作",
     right: "生成右热区动作",
@@ -246,6 +247,7 @@ async function handleRetry() {
       const res = await submitGeneration({
         petId: oldJob.pet_id,
         idempotencyKey: createIdempotencyKey("retry"),
+        retryFromJobId: oldJob.staged ? oldJob.id : undefined,
         mockDelaySeconds: systemState.config?.mock_controls_enabled ? 1.8 : undefined,
       });
       if (res.pet) upsertPet(res.pet);

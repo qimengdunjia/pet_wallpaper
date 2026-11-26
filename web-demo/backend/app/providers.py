@@ -10,14 +10,16 @@ import shutil
 import sys
 import time
 import types
+from io import BytesIO
 from pathlib import Path
 from typing import Awaitable, Callable
 from urllib.parse import quote, urlparse
 
 import httpx
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .config import REPO_ROOT, Settings
+from .decoration import Decoration, compose_decoration, portrait_prompt, styled_idle_prompt, styled_video_prompt
 
 
 def _load_algo_presets() -> tuple[dict, dict]:
@@ -53,7 +55,7 @@ class ProviderError(Exception):
 
 
 class BaseGenerationProvider:
-    """生成供应商抽象接口。"""
+    """生成供应商抽象接口，约定正面照、确认后的动画与旧版整套生成的返回结构。"""
 
     async def close(self) -> None:
         return None
@@ -70,6 +72,10 @@ class BaseGenerationProvider:
         persist_remote: PersistRemoteFn,
         update_progress: ProgressFn,
     ) -> tuple[Path, dict[str, Path]]:
+        """执行 job 与 pet 的生成阶段；回调记录进度，返回图像路径及视频路径映射。
+
+        正面照阶段只输出图像。确认后用原照与装扮生成待机图，供视频阶段参考。
+        """
         raise NotImplementedError
 
 
@@ -95,6 +101,7 @@ class MockGenerationProvider(BaseGenerationProvider):
         persist_remote: PersistRemoteFn,
         update_progress: ProgressFn,
     ) -> tuple[Path, dict[str, Path]]:
+        """用本地素材和可控延迟模拟 job 的阶段，返回产出图像与视频的路径。"""
         output_dir.mkdir(parents=True, exist_ok=True)
         species = pet["species"]
         sample_dir = self.settings.assets_dir / "samples" / species
@@ -107,6 +114,20 @@ class MockGenerationProvider(BaseGenerationProvider):
         fail_stage = options.get("fail_stage")
         fail_message = str(options.get("fail_message") or "模拟生成失败，请重试")
 
+        if job.get("portrait_only"):
+            await update_progress("portrait", 45)
+            await asyncio.sleep(min(total_delay / 4, 1.0))
+            if fail_stage in {"portrait", "any"}:
+                raise ProviderError(fail_message)
+            target = output_dir / "portrait-source.png"
+            artwork = self.settings.assets_dir / "decoration" / f"mock-{species}.webp"
+            with Image.open(artwork) as source:
+                pet_image = ImageOps.contain(source.convert("RGBA"), (960, 800), Image.Resampling.LANCZOS)
+            image = Image.new("RGBA", (1920, 1080))
+            image.alpha_composite(pet_image, ((image.width - pet_image.width) // 2, 975 - pet_image.height))
+            image.save(target)
+            return target, {}
+
         remote = dict(job.get("remote_tasks") or {})
         stages = [
             ("idle", sample_dir / "idle.jpg", output_dir / "idle.jpg"),
@@ -114,6 +135,12 @@ class MockGenerationProvider(BaseGenerationProvider):
             ("center", sample_dir / "center.mp4", output_dir / "center.mp4"),
             ("right", sample_dir / "right.mp4", output_dir / "right.mp4"),
         ]
+        decoration = job.get("decoration")
+        idle_path = output_dir / "idle.jpg"
+        if decoration:
+            idle_path = output_dir / "idle.png"
+            stages[0] = ("idle", Path(job["photo_path"]), idle_path)
+            stages.insert(1, ("idle-video", idle_path, output_dir / "idle-video.mp4"))
         per_stage_delay = total_delay / len(stages)
 
         for stage_key, src_file, dst_file in stages:
@@ -132,7 +159,7 @@ class MockGenerationProvider(BaseGenerationProvider):
                 remote[stage_key] = record
                 await persist_remote(remote)
 
-            await update_progress(stage_key, self.STAGE_PROGRESS[stage_key])
+            await update_progress(stage_key, self.STAGE_PROGRESS.get(stage_key, 25))
             await asyncio.sleep(per_stage_delay)
 
             if fail_stage in {stage_key, "any"}:
@@ -141,20 +168,48 @@ class MockGenerationProvider(BaseGenerationProvider):
                 await persist_remote(remote)
                 raise ProviderError(fail_message)
 
-            shutil.copyfile(src_file, dst_file)
+            if stage_key == "idle" and decoration:
+                with Image.open(src_file) as source:
+                    pet_image = ImageOps.contain(source.convert("RGBA"), (960, 800), Image.Resampling.LANCZOS)
+                layer = Image.new("RGBA", (1920, 1080))
+                layer.alpha_composite(pet_image, ((layer.width - pet_image.width) // 2, (layer.height - pet_image.height) // 2))
+                compose_decoration(layer, self.settings.assets_dir, Decoration.model_validate(decoration)).save(dst_file)
+            elif stage_key == "idle-video":
+                await self._make_mock_idle(src_file, dst_file)
+            else:
+                shutil.copyfile(src_file, dst_file)
             record["state"] = "complete"
             remote[stage_key] = record
             await persist_remote(remote)
 
         await update_progress("validating", self.STAGE_PROGRESS["validating"])
         return (
-            output_dir / "idle.jpg",
+            idle_path,
             {
                 "left": output_dir / "left.mp4",
                 "center": output_dir / "center.mp4",
                 "right": output_dir / "right.mp4",
+                **({"idle-video": output_dir / "idle-video.mp4"} if decoration else {}),
             },
         )
+
+    async def _make_mock_idle(self, source: Path, target: Path) -> None:
+        temporary = target.with_suffix(".part")
+        process = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(source), "-t", "2",
+            "-vf", "scale=960:-2", "-r", "25", "-an", "-c:v", "libx264", "-threads", "2",
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", str(temporary),
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            if await process.wait():
+                raise ProviderError("模拟待机视频生成失败")
+            temporary.replace(target)
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+            temporary.unlink(missing_ok=True)
 
 
 class KlingGenerationProvider(BaseGenerationProvider):
@@ -209,10 +264,17 @@ class KlingGenerationProvider(BaseGenerationProvider):
             )
         return payload
 
-    async def _submit_idle(self, photo_path: Path, species: str, external_id: str, prompt: str | None = None) -> str:
+    async def _submit_idle(
+        self, photo_path: Path, species: str, external_id: str, prompt: str | None = None,
+        *, accessory_path: Path | None = None,
+    ) -> str:
         preset_key = "cat-idle" if species == "cat" else "dog-idle"
         prompt = prompt or ALGO_IMAGE_PRESETS[preset_key]["prompt"]
-        encoded = base64.b64encode(photo_path.read_bytes()).decode("ascii")
+        images = [{"image": base64.b64encode(photo_path.read_bytes()).decode("ascii")}]
+        if accessory_path:
+            with Image.open(accessory_path) as accessory, BytesIO() as buffer:
+                accessory.save(buffer, format="PNG")
+                images.append({"image": base64.b64encode(buffer.getvalue()).decode("ascii")})
         payload = {
             "model_name": "kling-v3-omni",
             "prompt": prompt,
@@ -220,7 +282,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
             "aspect_ratio": "16:9",
             "n": 1,
             "external_task_id": external_id,
-            "image_list": [{"image": encoded}],
+            "image_list": images,
             "result_type": "single",
         }
         result = await self._request("POST", "/v1/images/omni-image", json=payload)
@@ -347,12 +409,16 @@ class KlingGenerationProvider(BaseGenerationProvider):
         persist_remote: PersistRemoteFn,
         update_progress: ProgressFn,
     ) -> tuple[Path, dict[str, Path]]:
+        """生成或恢复可灵 job，返回本地待机图和使用该图生成的动作视频路径。"""
         output_dir.mkdir(parents=True, exist_ok=True)
         remote = dict(job.get("remote_tasks") or {})
         prompts = (job.get("generation_config") or {}).get("prompts", {})
 
-        # 1) 待机图阶段
-        idle_rec = remote.get("idle", {})
+        # 正面照使用独立记录，旧任务仍以 idle 作为生图阶段。
+        portrait_only = job.get("portrait_only")
+        decoration = job.get("decoration")
+        image_stage = "portrait" if portrait_only else "idle"
+        idle_rec = remote.get(image_stage, {})
         idle_path: Path | None = None
         if idle_rec.get("state") == "complete" and idle_rec.get("file"):
             candidate = output_dir / idle_rec["file"]
@@ -360,31 +426,44 @@ class KlingGenerationProvider(BaseGenerationProvider):
                 idle_path = candidate
 
         if idle_path is None:
-            await update_progress("idle", 20)
+            await update_progress(image_stage, 20)
             if idle_rec.get("state") == "submitting" and not idle_rec.get("provider_id"):
                 raise ProviderError("待机图提交时服务中断，请先在可灵控制台确认后再重新发起")
             if not idle_rec.get("provider_id"):
-                idle_rec = {"state": "submitting", "external_id": f"{job['id']}-idle"}
-                remote["idle"] = idle_rec
+                idle_rec = {"state": "submitting", "external_id": f"{job['id']}-{image_stage}"}
+                remote[image_stage] = idle_rec
                 await persist_remote(remote)
+                prompt = prompts.get("image") or ALGO_IMAGE_PRESETS[f"{pet['species']}-idle"]["prompt"]
+                if portrait_only:
+                    prompt = portrait_prompt(prompt)
+                elif decoration:
+                    prompt = styled_idle_prompt(prompt, decoration)
+                accessory_path = None
+                if decoration and decoration["accessory"] != "none":
+                    accessory_path = self.settings.assets_dir / "decoration" / f"{decoration['accessory']}.webp"
                 provider_id = await self._submit_idle(
-                    Path(job["photo_path"]), pet["species"], idle_rec["external_id"], prompts.get("image")
+                    Path(job["photo_path"]), pet["species"], idle_rec["external_id"], prompt,
+                    accessory_path=accessory_path,
                 )
                 idle_rec.update(state="running", provider_id=provider_id)
-                remote["idle"] = idle_rec
                 await persist_remote(remote)
 
             idle_path = await self._poll_and_download(
-                "image", idle_rec["provider_id"], output_dir / "idle", self._query_idle
+                "image", idle_rec["provider_id"], output_dir / image_stage, self._query_idle
             )
             idle_rec.update(state="complete", file=idle_path.name)
-            remote["idle"] = idle_rec
+            remote[image_stage] = idle_rec
             await persist_remote(remote)
 
-        # 2) 使用同一张待机图生成左、中、右三段动作视频
+        if portrait_only:
+            return idle_path, {}
+
+        # 确认后的新任务额外生成待机视频，旧任务继续恢复原来的三个热区。
         action_paths: dict[str, Path] = {}
         stage_progress = {"left": 45, "center": 70, "right": 90}
-        for direction in ("left", "center", "right"):
+        if decoration:
+            stage_progress = {"idle-video": 30, **stage_progress}
+        for direction, progress in stage_progress.items():
             rec = remote.get(direction, {})
             if rec.get("state") == "complete" and rec.get("file"):
                 existing = output_dir / rec["file"]
@@ -392,14 +471,21 @@ class KlingGenerationProvider(BaseGenerationProvider):
                     action_paths[direction] = existing
                     continue
 
-            await update_progress(direction, stage_progress[direction])
+            await update_progress(direction, progress)
             if rec.get("state") == "submitting" and not rec.get("provider_id"):
                 raise ProviderError(f"{direction} 动作提交时服务中断，请核对控制台后再重新生成")
             if not rec.get("provider_id"):
                 rec = {"state": "submitting", "external_id": f"{job['id']}-{direction}"}
                 remote[direction] = rec
                 await persist_remote(remote)
-                provider_id = await self._submit_action_video(idle_path, pet["species"], direction, prompts.get(direction))
+                prompt_key = "idle" if direction == "idle-video" else direction
+                prompt = prompts.get(prompt_key)
+                if decoration:
+                    fallback = ALGO_VIDEO_PRESETS.get(f"{pet['species']}-{prompt_key}", {}).get(
+                        "prompt", "宠物保持正面姿态，自然眨眼和呼吸，首尾姿态一致。"
+                    )
+                    prompt = styled_video_prompt(prompt or fallback)
+                provider_id = await self._submit_action_video(idle_path, pet["species"], prompt_key, prompt)
                 rec.update(state="running", provider_id=provider_id)
                 remote[direction] = rec
                 await persist_remote(remote)

@@ -20,6 +20,7 @@ import { setRoute, showToast, systemState } from "./systemStore";
 
 export const generationState = reactive({
   jobsById: {} as Record<string, GenerationJob>,
+  decorationJobIds: [] as string[], // 当前装扮页关注的单宠或双宠任务。
   waitingJobIds: [] as string[],
   firstRoundComplete: false,
   // 只有本次等待无法继续时才显示失败面板。
@@ -29,6 +30,38 @@ export const generationState = reactive({
 const pollTimers = new Map<string, number>();
 const loadFailures = new Map<string, string>();
 let evaluation: { routeRevision: number } | null = null;
+
+function decorationStorageKey(): string {
+  const session = new URLSearchParams(window.location.search).get("session") || "default";
+  return `pet-wallpaper-decoration:${session}`;
+}
+
+/** 读取当前浏览器会话保留的装扮任务 ID，用于页面刷新后恢复同一批次。 */
+export function readDecorationBatch(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return (window.sessionStorage.getItem(decorationStorageKey()) || "").split(",").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+/** 设置装扮页正在处理的任务 ID，传入空数组即清除当前批次。 */
+export function setDecorationBatch(jobIds: string[]) {
+  generationState.decorationJobIds = [...jobIds];
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem(decorationStorageKey(), jobIds.join(","));
+    } catch {
+      // 禁用存储时，当前页面仍可继续装扮。
+    }
+  }
+}
+
+/** 判断 job 是否还在正面照或装扮阶段，供恢复页面与过滤动画等待任务使用。 */
+export function needsDecoration(job: GenerationJob): boolean {
+  return Boolean(job.staged && !job.decoration && job.status !== "cancelled");
+}
 
 /** 开始等待 jobIds 对应的任务，清除上一次等待的播放和错误状态。 */
 export function startWaitingBatch(jobIds: string[]) {
@@ -142,7 +175,9 @@ export async function retryWaitingWallpaper(deps?: SwitchDeps) {
 }
 
 export async function handleJobSnapshot(job: GenerationJob, deps?: SwitchDeps): Promise<void> {
-  const prevStatus = generationState.jobsById[job.id]?.status;
+  const previous = generationState.jobsById[job.id];
+  if (previous && previous.updated_at > job.updated_at) return;
+  const prevStatus = previous?.status;
   generationState.jobsById[job.id] = job;
   const updatedPet = applyJobToPet(job);
   const petName = updatedPet?.name || "宠物";
@@ -150,9 +185,10 @@ export async function handleJobSnapshot(job: GenerationJob, deps?: SwitchDeps): 
   const isCurrentWaiting =
     systemState.route === "generating" && generationState.waitingJobIds.includes(job.id);
 
-  if (job.status === "ready" || job.status === "failed") {
+  if (job.status !== "queued" && job.status !== "generating") {
     stopPollingJob(job.id);
   }
+  if (systemState.route === "onboarding-decoration" && generationState.decorationJobIds.includes(job.id)) return;
 
   // 用户已退出等待页或当前不在关注这批任务：只更新对应宠物状态与轻提示，不覆盖当前壁纸
   if (!isCurrentWaiting) {
@@ -179,6 +215,8 @@ export function trackJob(job: GenerationJob, deps?: SwitchDeps) {
   applyJobToPet(job);
   if (job.status === "queued" || job.status === "generating") {
     startPollingJob(job.id, deps);
+  } else {
+    stopPollingJob(job.id);
   }
 }
 
@@ -234,6 +272,7 @@ export function hasActiveBackgroundJobs(): boolean {
 export function resetGenerationState() {
   stopAllPolling();
   clearWaitingBatch();
+  setDecorationBatch([]);
   generationState.jobsById = {};
 }
 
@@ -248,6 +287,7 @@ export function cleanupPetJobs(petId: string) {
   }
   if (removedIds.size > 0) {
     generationState.waitingJobIds = generationState.waitingJobIds.filter((id) => !removedIds.has(id));
+    setDecorationBatch(generationState.decorationJobIds.filter((id) => !removedIds.has(id)));
   }
 }
 

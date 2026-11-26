@@ -16,6 +16,7 @@ const VALID_ROUTES = new Set<RouteView>([
   "home",
   "onboarding-species",
   "onboarding-upload",
+  "onboarding-decoration",
   "generating",
   "wallpaper",
   "settings",
