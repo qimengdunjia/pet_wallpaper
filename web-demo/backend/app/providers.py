@@ -19,7 +19,14 @@ import httpx
 from PIL import Image, ImageOps
 
 from .config import REPO_ROOT, Settings
-from .decoration import Decoration, compose_decoration, portrait_prompt, styled_idle_prompt, styled_video_prompt
+from .decoration import (
+    PORTRAIT_IMAGE_SIZE,
+    Decoration,
+    compose_decoration,
+    portrait_prompt,
+    styled_idle_prompt,
+    styled_video_prompt,
+)
 
 
 def _load_algo_presets() -> tuple[dict, dict]:
@@ -122,9 +129,9 @@ class MockGenerationProvider(BaseGenerationProvider):
             target = output_dir / "portrait-source.png"
             artwork = self.settings.assets_dir / "decoration" / f"mock-{species}.webp"
             with Image.open(artwork) as source:
-                pet_image = ImageOps.contain(source.convert("RGBA"), (960, 800), Image.Resampling.LANCZOS)
-            image = Image.new("RGBA", (1920, 1080))
-            image.alpha_composite(pet_image, ((image.width - pet_image.width) // 2, 975 - pet_image.height))
+                pet_image = ImageOps.contain(source.convert("RGBA"), (820, 820), Image.Resampling.LANCZOS)
+            image = Image.new("RGBA", PORTRAIT_IMAGE_SIZE)
+            image.alpha_composite(pet_image, ((image.width - pet_image.width) // 2, image.height - pet_image.height))
             image.save(target)
             return target, {}
 
@@ -266,7 +273,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
 
     async def _submit_idle(
         self, photo_path: Path, species: str, external_id: str, prompt: str | None = None,
-        *, accessory_path: Path | None = None,
+        *, accessory_path: Path | None = None, aspect_ratio: str = "16:9",
     ) -> str:
         preset_key = "cat-idle" if species == "cat" else "dog-idle"
         prompt = prompt or ALGO_IMAGE_PRESETS[preset_key]["prompt"]
@@ -279,7 +286,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
             "model_name": "kling-v3-omni",
             "prompt": prompt,
             "resolution": "2k",
-            "aspect_ratio": "16:9",
+            "aspect_ratio": aspect_ratio,
             "n": 1,
             "external_task_id": external_id,
             "image_list": images,
@@ -435,7 +442,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
                 await persist_remote(remote)
                 prompt = prompts.get("image") or ALGO_IMAGE_PRESETS[f"{pet['species']}-idle"]["prompt"]
                 if portrait_only:
-                    prompt = portrait_prompt(prompt)
+                    prompt = portrait_prompt(prompt, pet["species"])
                 elif decoration:
                     prompt = styled_idle_prompt(prompt, decoration, pet["species"])
                 accessory_path = None
@@ -444,6 +451,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
                 provider_id = await self._submit_idle(
                     Path(job["photo_path"]), pet["species"], idle_rec["external_id"], prompt,
                     accessory_path=accessory_path,
+                    aspect_ratio="1:1" if portrait_only else "16:9",
                 )
                 idle_rec.update(state="running", provider_id=provider_id)
                 await persist_remote(remote)

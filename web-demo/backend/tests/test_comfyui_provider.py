@@ -12,6 +12,7 @@ import pytest
 from app.comfyui import ComfyUIGenerationProvider
 from app.comfyui_workflows import OUTPUT_NODE
 from app.config import Settings
+from app.decoration import PORTRAIT_IMAGE_SIZE
 
 PRIMARY = "http://primary:8188"
 SECONDARY = "http://secondary:8189"
@@ -40,14 +41,21 @@ def test_confirmed_decoration_uses_original_photo_for_idle_and_idle_for_all_vide
                 submissions[payload["prompt_id"]] = stage
                 conditioning = graph["conditioning"]["inputs"]
                 if stage in {"portrait", "idle"}:
+                    assert graph["sample"]["inputs"]["seed"] == 49
                     assert graph["reference"]["inputs"]["image"] == "original.jpg"
                     assert conditioning["images.image_1"] == ["reference", 0]
                     if stage == "portrait":
                         assert "images.image_2" not in conditioning
+                        assert (conditioning["width"], conditioning["height"]) == PORTRAIT_IMAGE_SIZE
+                        assert conditioning["prompt"].startswith("<Picture 1> 为宠物参考图。")
+                        assert conditioning["prompt"].count("<Picture 1> 为宠物参考图") == 1
+                        assert "1:1 正方形" in conditioning["prompt"]
+                        assert "只露出头部、颈部和上半身胸部" in conditioning["prompt"]
                         assert "#00FF00" not in conditioning["prompt"]
                         assert "#000000" not in conditioning["prompt"]
                         assert "#A3CEF7" in conditioning["prompt"]
                     else:
+                        assert (conditioning["width"], conditioning["height"]) == (2560, 1440)
                         assert conditioning["images.image_2"] == ["accessory_reference", 0]
                         assert graph["accessory_reference"]["inputs"]["image"] == "bow-tie.webp"
                         assert "#FADEE4" in conditioning["prompt"]

@@ -16,12 +16,12 @@ from PIL import Image
 
 from .comfyui_workflows import OUTPUT_NODE, image_workflow, video_workflow
 from .config import Settings
-from .decoration import portrait_prompt, styled_idle_prompt, styled_video_prompt
+from .decoration import PORTRAIT_IMAGE_SIZE, portrait_prompt, styled_idle_prompt, styled_video_prompt
 from .generation_settings import default_generation_settings
 from .providers import BaseGenerationProvider, PersistRemoteFn, ProgressFn, ProviderError
 
-# 待机图统一使用固定采样种子。
-IDLE_IMAGE_SEED = 49
+# 生图阶段（正面照与待机图）统一使用固定采样种子。
+IMAGE_SEED = 49
 VIDEO_STAGES = (("idle-video", "idle", 40), ("left", "left", 55), ("center", "center", 70), ("right", "right", 85))
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,23 @@ def _queue_prompt_ids(items: object) -> set[str]:
         if isinstance(entry, (list, tuple)) and len(entry) >= 2 and isinstance(entry[1], str):
             ids.add(entry[1])
     return ids
+
+
+def _flatten_rgba_to_white(path: Path) -> BytesIO:
+    """将含透明通道的装饰参考图合成到纯白底，避免 ComfyUI 去 Alpha 后暴露杂色。"""
+    with Image.open(path) as source:
+        if source.mode in {"RGBA", "LA"} or "transparency" in source.info:
+            rgba = source.convert("RGBA")
+            canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+            canvas.alpha_composite(rgba)
+            rgb = canvas.convert("RGB")
+        else:
+            rgb = source.convert("RGB")
+        encoded = BytesIO()
+        fmt = "WEBP" if path.suffix.lower() == ".webp" else "PNG"
+        rgb.save(encoded, format=fmt, quality=95)
+        encoded.seek(0)
+        return encoded
 
 
 def _compress_reference(path: Path, max_bytes: int) -> BytesIO:
@@ -141,10 +158,12 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         except (httpx.HTTPError, ValueError) as exc:
             raise ProviderError("无法连接或读取 ComfyUI，请检查服务和 SSH 转发", method == "GET") from exc
 
-    async def _upload(self, base: str, path: Path, name: str) -> str:
+    async def _upload(self, base: str, path: Path, name: str, *, flatten_rgba: bool = False) -> str:
         mime = {".png": "image/png", ".webp": "image/webp"}.get(path.suffix, "image/jpeg")
         limit = self.settings.comfyui_reference_max_bytes
-        if limit and path.stat().st_size > limit:
+        if flatten_rgba:
+            file = await asyncio.to_thread(_flatten_rgba_to_white, path)
+        elif limit and path.stat().st_size > limit:
             file = await asyncio.to_thread(_compress_reference, path, limit)
             name = str(Path(name).with_suffix(".jpg"))
             mime = "image/jpeg"
@@ -246,17 +265,18 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                 kind = "image" if is_image else "video"
                 prompt = prompts[prompt_key]
                 if stage == "portrait":
-                    prompt = portrait_prompt(prompt)
+                    prompt = portrait_prompt(prompt, pet["species"])
                 elif decoration:
                     prompt = styled_idle_prompt(prompt, decoration, pet["species"]) if is_image else styled_video_prompt(prompt)
-                size = (config[f"{kind}_width"], config[f"{kind}_height"])
+                size = PORTRAIT_IMAGE_SIZE if stage == "portrait" else (config[f"{kind}_width"], config[f"{kind}_height"])
                 prefix = f"pet_wallpaper_demo/{job_id}/{stage}"
                 if is_image:
                     accessory_reference = None
                     if decoration and decoration["accessory"] != "none":
                         filename = f"{decoration['accessory']}.webp"
                         accessory_reference = await self._upload(
-                            endpoint, self.settings.assets_dir / "decoration" / filename, f"{job_id}-{filename}"
+                            endpoint, self.settings.assets_dir / "decoration" / filename, f"{job_id}-{filename}",
+                            flatten_rgba=True,
                         )
                     graph = image_workflow(reference, prompt, size, seed, prefix, accessory_reference=accessory_reference)
                 else:
@@ -297,9 +317,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
             image_endpoint = image_record.get("base_url", base)
             async with self._endpoint_locks[image_endpoint]:
                 await advance(image_stage, 20)
-                # 用新任务重试正面照时更换种子，待机图保留原定采样种子。
-                image_seed = video_seed if portrait_only else IDLE_IMAGE_SEED
-                await render(image_endpoint, image_stage, "image", image_seed, idle, photo)
+                await render(image_endpoint, image_stage, "image", IMAGE_SEED, idle, photo)
         if portrait_only:
             return idle, {}
         reference = remote.get("idle", {}).get("output_reference")

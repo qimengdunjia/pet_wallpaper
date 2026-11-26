@@ -129,6 +129,7 @@ export function deletePet(petId: string): Promise<{ deleted_pet_id: string; was_
   );
 }
 
+/** 上传照片或从指定失败任务重试，返回宠物和提交后的任务快照。 */
 export async function submitGeneration(input: {
   petId: string;
   idempotencyKey: string;

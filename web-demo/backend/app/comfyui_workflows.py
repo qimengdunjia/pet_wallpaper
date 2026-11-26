@@ -17,13 +17,19 @@ def image_workflow(
 ) -> dict:
     """组装生图节点，reference 为用户原照，accessory_reference 为可选装饰参考图。"""
     width, height = size
+    if prompt.startswith("<Picture 1>"):
+        full_prompt = prompt
+    elif accessory_reference:
+        full_prompt = f"<Picture 1> 为宠物参考图，<Picture 2> 为装饰物参考图。{prompt}"
+    else:
+        full_prompt = f"<Picture 1> 为宠物参考图。{prompt}"
     graph = {
         "reference": _node("LoadImage", image=reference),
         "model": _node("UNETLoader", unet_name="minimax_h3_image_pruned_int8_convrot.safetensors", weight_dtype="default"),
         "clip": _node("CLIPLoader", clip_name=CLIP, type="minimax", device="default"),
         "vae": _node("VAELoader", vae_name="minimax_h3_image_vae_fp16.safetensors"),
         "conditioning": _node("MiniMaxH3ImageConditioning", clip=["clip", 0], vae=["vae", 0],
-                              prompt=f"<Picture 1> 为宠物参考图。{prompt}", width=width, height=height,
+                              prompt=full_prompt, width=width, height=height,
                               **{"images.image_1": ["reference", 0]}),
         "negative": _node("ConditioningZeroOut", conditioning=["conditioning", 0]),
         "sample": _node("KSampler", model=["model", 0], positive=["conditioning", 0], negative=["negative", 0],

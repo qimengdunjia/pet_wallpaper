@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .config import Settings
 from .db import DemoDatabase
-from .decoration import prepare_portrait
+from .decoration import PORTRAIT_IMAGE_SIZE, prepare_portrait
 from .media import AssetValidationError, inspect_image, validate_asset_bundle
 from .providers import BaseGenerationProvider, ProviderError, build_provider
 
@@ -152,7 +152,7 @@ class GenerationWorker:
                     generation = job.get("generation_config") or {}
                     if mode == "comfyui" and generation and (
                         idle_meta["width"], idle_meta["height"]
-                    ) != (generation["image_width"], generation["image_height"]):
+                    ) != PORTRAIT_IMAGE_SIZE:
                         raise AssetValidationError("ComfyUI 正面照分辨率与任务设置不一致")
                     portrait = work_dir / "portrait.png"
                     await asyncio.to_thread(prepare_portrait, idle_path, portrait)

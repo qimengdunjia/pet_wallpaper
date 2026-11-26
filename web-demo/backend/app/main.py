@@ -626,8 +626,8 @@ def create_app(
         if not path.is_file():
             raise HTTPException(404, "正面照文件不存在")
         with Image.open(path) as source:
-            # 全屏布局仍只需在左列预览，缩小长边避免每次选择传输整张原图；正面照不叠加配饰预览。
-            source.thumbnail((960, 720), Image.Resampling.LANCZOS)
+            # 装扮页左列预览框接近 1:1，按长边限幅避免每次请求传输过大的原图；正面照不叠加配饰预览。
+            source.thumbnail((960, 960), Image.Resampling.LANCZOS)
             image = compose_decoration(source.convert("RGBA"), config.assets_dir, Decoration(
                 background=background, accessory="none",
             ))
