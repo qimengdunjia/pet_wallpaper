@@ -67,7 +67,7 @@ def test_loading_workflow_reuses_keyframes():
 
 
 def test_video_resolution_controls():
-    """检查逐段尺寸控件支持独立采样和导出，三个导出缩放节点共用成片宽高。"""
+    """检查逐段尺寸控件及导出链，验证成片首尾来自模型输出。"""
     workflow = json.loads(OUTPUT.read_text(encoding="utf-8"))
     graph = workflow["definitions"]["subgraphs"][1]
     nodes = {node["id"]: node for node in graph["nodes"]}
@@ -84,7 +84,19 @@ def test_video_resolution_controls():
             assert {port["name"] for port in node["inputs"] if "widget" in port} >= expected.keys()
     sampler = next(node for node in nodes.values() if node["type"] == "MiniMaxH3ImageToVideo")
     scales = [node for node in nodes.values() if node["type"] == "ImageScale"]
-    assert len(scales) == 3
+    assert len(scales) == 1
+    scale = scales[0]
+    encode = nodes[next(link["origin_id"] for link in links.values() if link["target_id"] == -20)]
+    assert encode["type"] == "CreateVideo"
+    assert not {"ImageFromBatch", "BatchImagesNode"}.intersection(node["type"] for node in nodes.values())
+    assert source(encode, "images")["origin_id"] == scale["id"]
+    frames = nodes[source(scale, "image")["origin_id"]]
+    sample = nodes[source(frames, "video")["origin_id"]]
+    decoded_video = nodes[source(sample, "video")["origin_id"]]
+    assert [node["type"] for node in (frames, sample, decoded_video)] == [
+        "GetVideoComponents", "VideoFrameSample", "CreateVideo",
+    ]
+    assert nodes[source(decoded_video, "images")["origin_id"]]["type"] == "VAEDecode"
     for axis in ("width", "height"):
         aligner = nodes[source(sampler, axis)["origin_id"]]
         assert aligner["type"] == "ComfyMathExpression"

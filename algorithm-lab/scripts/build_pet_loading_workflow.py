@@ -158,25 +158,16 @@ def prepare_video(graph, defaults, add, wire):
     math_outputs = [("FLOAT", "FLOAT"), ("INT", "INT"), ("BOOL", "BOOLEAN")]
     frame_count = add(graph, "ComfyMathExpression", "成片帧数", [310, 5000],
                       math_inputs, math_outputs, expression=f"round(a * {FPS})")
-    body_count = add(graph, "ComfyMathExpression", "中间动作帧数", [620, 5000],
-                     math_inputs, math_outputs, expression="a - 2")
-    sample = add(graph, "VideoFrameSample", "均匀采样（保留两端）", [620, 4660], video_input + [
+    sample = add(graph, "VideoFrameSample", "均匀采样（保留模型首尾帧）", [620, 4660], video_input + [
         ("num_frames", "INT"), ("strategy", "COMBO"), ("seed", "INT")], video_output,
         num_frames=72, strategy="uniform", seed=0)
     unpack = add(graph, "GetVideoComponents", "取出画面帧", [930, 4660], video_input,
                  image_output + [("audio", "AUDIO"), ("fps", "FLOAT"), ("bit_depth", "COMBO"), ("color_space", "COMBO")])
     scale_inputs = [("image", "IMAGE"), ("upscale_method", "COMBO"), ("width", "INT"),
                     ("height", "INT"), ("crop", "COMBO")]
-    body = add(graph, "ImageFromBatch", "保留中间动作帧", [1240, 4660],
-               [("image", "IMAGE"), ("batch_index", "INT"), ("length", "INT")], image_output,
-               batch_index=1, length=70)
     scale_options = {"upscale_method": "bicubic", "width": 1920, "height": 1080, "crop": "center"}
-    scale = add(graph, "ImageScale", "动作帧放大至 1080p", [1550, 4660], scale_inputs, image_output, **scale_options)
-    first = add(graph, "ImageScale", "原始首图转 1080p", [1550, 4890], scale_inputs, image_output, **scale_options)
-    last = add(graph, "ImageScale", "原始尾图转 1080p", [1550, 5110], scale_inputs, image_output, **scale_options)
-    batch = add(graph, "BatchImagesNode", "首图 + 动作 + 尾图", [1860, 4660],
-                [(f"images.image{index}", "IMAGE") for index in range(3)], image_output)
-    encode = add(graph, "CreateVideo", "24 fps 无声成片", [2170, 4660], [("images", "IMAGE")],
+    scale = add(graph, "ImageScale", "调整模型帧尺寸", [1240, 4660], scale_inputs, image_output, **scale_options)
+    encode = add(graph, "CreateVideo", "24 fps 无声成片", [1550, 4660], [("images", "IMAGE")],
                  video_output, **nodes[130]["widgets_values_named"])
     encode["size"] = [265, 190]
     wire(graph, nodes[133], 0, frame_count, "values.a")
@@ -184,19 +175,12 @@ def prepare_video(graph, defaults, add, wire):
     wire(graph, nodes[130], 0, sample, "video")
     wire(graph, frame_count, 1, sample, "num_frames")
     wire(graph, sample, 0, unpack, "video")
-    wire(graph, frame_count, 1, body_count, "values.a")
-    wire(graph, body_count, 1, body, "length")
-    wire(graph, unpack, 0, body, "image")
-    wire(graph, body, 0, scale, "image")
-    wire(graph, None, 3, first, "image")
-    wire(graph, None, 4, last, "image")
-    for index, node in enumerate((first, scale, last)):
-        wire(graph, node, 0, batch, f"images.image{index}")
-    wire(graph, batch, 0, encode, "images")
+    wire(graph, unpack, 0, scale, "image")
+    wire(graph, scale, 0, encode, "images")
     wire(graph, encode, 0, None, "VIDEO")
-    graph["groups"][-1].update(title="定帧与导出", bounding=[-80, 4540, 2550, 770])
-    graph["outputNode"]["bounding"] = [2490, 4650, 128, 68]
-    graph["outputs"][0]["pos"] = [2514, 4674]
+    graph["groups"][-1].update(title="模型帧采样与导出", bounding=[-80, 4540, 1920, 650])
+    graph["outputNode"]["bounding"] = [1870, 4650, 128, 68]
+    graph["outputs"][0]["pos"] = [1894, 4674]
 
 
 def expose_video_resolution(workflow):
@@ -238,8 +222,6 @@ def expose_video_resolution(workflow):
             for scale in scales:
                 wire(graph, dimension, 0, scale, axis)
 
-    for scale, title in zip(scales, ("调整动作帧尺寸", "调整首帧尺寸", "调整尾帧尺寸")):
-        scale["title"] = title
     for node in workflow["nodes"]:
         if node["type"] == graph["id"]:
             node["inputs"].extend({"name": name, "type": "INT", "widget": {"name": name}, "link": None}

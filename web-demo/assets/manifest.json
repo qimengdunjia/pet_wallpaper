@@ -16,7 +16,9 @@
       "fps": 24.0,
       "duration": 3.0,
       "aspect_ratio": "16:9",
-      "size_bytes": 241829
+      "size_bytes": 2782157,
+      "sha256": "747c1a073f38c730c0fbe110866684a5cd414fd8d9dd1d279fd04b707a2b70cf",
+      "mse_codec": "avc1.640028"
     },
     "loop": {
       "path": "transitions/chase-loop-7s.mp4",
@@ -25,9 +27,11 @@
       "width": 1920,
       "height": 1080,
       "fps": 24.0,
-      "duration": 7.0,
+      "duration": 6.875,
       "aspect_ratio": "16:9",
-      "size_bytes": 638453
+      "size_bytes": 6920523,
+      "sha256": "3995f516f11bccf664cf7c2f5da6e37b5851545d0a34638af2ccd0a9cd4d3349",
+      "mse_codec": "avc1.640028"
     }
   },
   "default_wallpaper": {

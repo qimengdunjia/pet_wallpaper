@@ -70,11 +70,11 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            317,
-            318,
-            320,
-            323,
-            326
+            309,
+            310,
+            312,
+            315,
+            318
           ]
         }
       ],
@@ -122,7 +122,7 @@
           "localized_name": "图片",
           "name": "images",
           "type": "IMAGE",
-          "link": 317
+          "link": 309
         },
         {
           "localized_name": "文件名前缀",
@@ -204,7 +204,7 @@
           "name": "image_1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 318
+          "link": 310
         },
         {
           "name": "image_2",
@@ -219,12 +219,12 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
+            311,
+            313,
+            316,
             319,
             321,
-            324,
-            327,
-            329,
-            330
+            322
           ]
         }
       ],
@@ -272,7 +272,7 @@
           "localized_name": "图片",
           "name": "images",
           "type": "IMAGE",
-          "link": 319
+          "link": 311
         },
         {
           "localized_name": "文件名前缀",
@@ -354,13 +354,13 @@
           "name": "image_1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 320
+          "link": 312
         },
         {
           "name": "image_2",
           "type": "IMAGE",
           "shape": 7,
-          "link": 321
+          "link": 313
         }
       ],
       "outputs": [
@@ -369,9 +369,9 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            322,
-            332,
-            336
+            314,
+            324,
+            328
           ]
         }
       ],
@@ -419,7 +419,7 @@
           "localized_name": "图片",
           "name": "images",
           "type": "IMAGE",
-          "link": 322
+          "link": 314
         },
         {
           "localized_name": "文件名前缀",
@@ -501,13 +501,13 @@
           "name": "image_1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 323
+          "link": 315
         },
         {
           "name": "image_2",
           "type": "IMAGE",
           "shape": 7,
-          "link": 324
+          "link": 316
         }
       ],
       "outputs": [
@@ -516,9 +516,9 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
+            317,
             325,
-            333,
-            335
+            327
           ]
         }
       ],
@@ -566,7 +566,7 @@
           "localized_name": "图片",
           "name": "images",
           "type": "IMAGE",
-          "link": 325
+          "link": 317
         },
         {
           "localized_name": "文件名前缀",
@@ -641,13 +641,13 @@
           "name": "first_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 326
+          "link": 318
         },
         {
           "name": "last_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 327
+          "link": 319
         },
         {
           "name": "width",
@@ -688,7 +688,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            328
+            320
           ]
         }
       ],
@@ -736,7 +736,7 @@
           "localized_name": "视频",
           "name": "video",
           "type": "VIDEO",
-          "link": 328
+          "link": 320
         },
         {
           "localized_name": "文件名前缀",
@@ -846,13 +846,13 @@
           "name": "first_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 329
+          "link": 321
         },
         {
           "name": "last_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 330
+          "link": 322
         },
         {
           "name": "width",
@@ -893,7 +893,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            331
+            323
           ]
         }
       ],
@@ -941,7 +941,7 @@
           "localized_name": "视频",
           "name": "video",
           "type": "VIDEO",
-          "link": 331
+          "link": 323
         },
         {
           "localized_name": "文件名前缀",
@@ -1051,13 +1051,13 @@
           "name": "first_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 332
+          "link": 324
         },
         {
           "name": "last_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 333
+          "link": 325
         },
         {
           "name": "width",
@@ -1098,7 +1098,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            334
+            326
           ]
         }
       ],
@@ -1146,7 +1146,7 @@
           "localized_name": "视频",
           "name": "video",
           "type": "VIDEO",
-          "link": 334
+          "link": 326
         },
         {
           "localized_name": "文件名前缀",
@@ -1256,13 +1256,13 @@
           "name": "first_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 335
+          "link": 327
         },
         {
           "name": "last_frame",
           "shape": 7,
           "type": "IMAGE",
-          "link": 336
+          "link": 328
         },
         {
           "name": "width",
@@ -1303,7 +1303,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            337
+            329
           ]
         }
       ],
@@ -1351,7 +1351,7 @@
           "localized_name": "视频",
           "name": "video",
           "type": "VIDEO",
-          "link": 337
+          "link": 329
         },
         {
           "localized_name": "文件名前缀",
@@ -1420,7 +1420,7 @@
   ],
   "links": [
     [
-      317,
+      309,
       20,
       0,
       21,
@@ -1428,7 +1428,7 @@
       "IMAGE"
     ],
     [
-      318,
+      310,
       20,
       0,
       22,
@@ -1436,7 +1436,7 @@
       "IMAGE"
     ],
     [
-      319,
+      311,
       22,
       0,
       23,
@@ -1444,7 +1444,7 @@
       "IMAGE"
     ],
     [
-      320,
+      312,
       20,
       0,
       24,
@@ -1452,7 +1452,7 @@
       "IMAGE"
     ],
     [
-      321,
+      313,
       22,
       0,
       24,
@@ -1460,7 +1460,7 @@
       "IMAGE"
     ],
     [
-      322,
+      314,
       24,
       0,
       25,
@@ -1468,7 +1468,7 @@
       "IMAGE"
     ],
     [
-      323,
+      315,
       20,
       0,
       26,
@@ -1476,7 +1476,7 @@
       "IMAGE"
     ],
     [
-      324,
+      316,
       22,
       0,
       26,
@@ -1484,7 +1484,7 @@
       "IMAGE"
     ],
     [
-      325,
+      317,
       26,
       0,
       27,
@@ -1492,7 +1492,7 @@
       "IMAGE"
     ],
     [
-      326,
+      318,
       20,
       0,
       28,
@@ -1500,7 +1500,7 @@
       "IMAGE"
     ],
     [
-      327,
+      319,
       22,
       0,
       28,
@@ -1508,7 +1508,7 @@
       "IMAGE"
     ],
     [
-      328,
+      320,
       28,
       0,
       29,
@@ -1516,7 +1516,7 @@
       "VIDEO"
     ],
     [
-      329,
+      321,
       22,
       0,
       30,
@@ -1524,7 +1524,7 @@
       "IMAGE"
     ],
     [
-      330,
+      322,
       22,
       0,
       30,
@@ -1532,7 +1532,7 @@
       "IMAGE"
     ],
     [
-      331,
+      323,
       30,
       0,
       31,
@@ -1540,7 +1540,7 @@
       "VIDEO"
     ],
     [
-      332,
+      324,
       24,
       0,
       32,
@@ -1548,7 +1548,7 @@
       "IMAGE"
     ],
     [
-      333,
+      325,
       26,
       0,
       32,
@@ -1556,7 +1556,7 @@
       "IMAGE"
     ],
     [
-      334,
+      326,
       32,
       0,
       33,
@@ -1564,7 +1564,7 @@
       "VIDEO"
     ],
     [
-      335,
+      327,
       26,
       0,
       34,
@@ -1572,7 +1572,7 @@
       "IMAGE"
     ],
     [
-      336,
+      328,
       24,
       0,
       34,
@@ -1580,7 +1580,7 @@
       "IMAGE"
     ],
     [
-      337,
+      329,
       34,
       0,
       35,
@@ -1623,8 +1623,8 @@
         "version": 1,
         "state": {
           "lastGroupId": 11,
-          "lastNodeId": 215,
-          "lastLinkId": 351,
+          "lastNodeId": 210,
+          "lastLinkId": 339,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -1715,7 +1715,7 @@
             "name": "image_2",
             "type": "IMAGE",
             "linkIds": [
-              316
+              308
             ],
             "pos": [
               -966,
@@ -2006,7 +2006,7 @@
                 "name": "images.image_2",
                 "shape": 7,
                 "type": "IMAGE",
-                "link": 316
+                "link": 308
               }
             ],
             "outputs": [
@@ -2370,7 +2370,7 @@
             "type": "IMAGE"
           },
           {
-            "id": 316,
+            "id": 308,
             "origin_id": -10,
             "origin_slot": 5,
             "target_id": 160,
@@ -2385,8 +2385,8 @@
         "version": 1,
         "state": {
           "lastGroupId": 11,
-          "lastNodeId": 215,
-          "lastLinkId": 351,
+          "lastNodeId": 210,
+          "lastLinkId": 339,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -2404,7 +2404,7 @@
         "outputNode": {
           "id": -20,
           "bounding": [
-            2490,
+            1870,
             4650,
             128,
             68
@@ -2455,8 +2455,7 @@
             "name": "first_frame",
             "type": "IMAGE",
             "linkIds": [
-              195,
-              309
+              195
             ],
             "pos": [
               -3036,
@@ -2469,8 +2468,7 @@
             "name": "last_frame",
             "type": "IMAGE",
             "linkIds": [
-              196,
-              310
+              196
             ],
             "pos": [
               -3036,
@@ -2484,7 +2482,7 @@
             "label": "采样宽度",
             "type": "INT",
             "linkIds": [
-              338
+              330
             ],
             "pos": [
               -3036,
@@ -2497,7 +2495,7 @@
             "label": "采样高度",
             "type": "INT",
             "linkIds": [
-              341
+              333
             ],
             "pos": [
               -3036,
@@ -2510,7 +2508,7 @@
             "label": "成片宽度",
             "type": "INT",
             "linkIds": [
-              344
+              336
             ],
             "pos": [
               -3036,
@@ -2523,7 +2521,7 @@
             "label": "成片高度",
             "type": "INT",
             "linkIds": [
-              348
+              338
             ],
             "pos": [
               -3036,
@@ -2537,11 +2535,11 @@
             "name": "VIDEO",
             "type": "VIDEO",
             "linkIds": [
-              315
+              307
             ],
             "localized_name": "VIDEO",
             "pos": [
-              2514,
+              1894,
               4674
             ]
           }
@@ -3165,7 +3163,7 @@
                 "widget": {
                   "name": "width"
                 },
-                "link": 340
+                "link": 332
               },
               {
                 "localized_name": "高度",
@@ -3174,7 +3172,7 @@
                 "widget": {
                   "name": "height"
                 },
-                "link": 343
+                "link": 335
               },
               {
                 "localized_name": "长度",
@@ -3508,8 +3506,7 @@
                 "name": "INT",
                 "type": "INT",
                 "links": [
-                  303,
-                  305
+                  303
                 ]
               },
               {
@@ -3527,69 +3524,8 @@
           },
           {
             "id": 201,
-            "type": "ComfyMathExpression",
-            "title": "中间动作帧数",
-            "pos": [
-              620,
-              5000
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 15,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "ComfyMathExpression"
-            },
-            "inputs": [
-              {
-                "name": "values.a",
-                "type": "FLOAT,INT,BOOLEAN",
-                "link": 305
-              },
-              {
-                "name": "expression",
-                "type": "STRING",
-                "link": null,
-                "widget": {
-                  "name": "expression"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "FLOAT",
-                "type": "FLOAT",
-                "links": []
-              },
-              {
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  306
-                ]
-              },
-              {
-                "name": "BOOL",
-                "type": "BOOLEAN",
-                "links": []
-              }
-            ],
-            "widgets_values": [
-              "a - 2"
-            ],
-            "widgets_values_named": {
-              "expression": "a - 2"
-            }
-          },
-          {
-            "id": 202,
             "type": "VideoFrameSample",
-            "title": "均匀采样（保留两端）",
+            "title": "均匀采样（保留模型首尾帧）",
             "pos": [
               620,
               4660
@@ -3599,7 +3535,7 @@
               130
             ],
             "flags": {},
-            "order": 16,
+            "order": 15,
             "mode": 0,
             "properties": {
               "cnr_id": "comfy-core",
@@ -3658,7 +3594,7 @@
             }
           },
           {
-            "id": 203,
+            "id": 202,
             "type": "GetVideoComponents",
             "title": "取出画面帧",
             "pos": [
@@ -3670,7 +3606,7 @@
               130
             ],
             "flags": {},
-            "order": 17,
+            "order": 16,
             "mode": 0,
             "properties": {
               "cnr_id": "comfy-core",
@@ -3689,7 +3625,7 @@
                 "name": "IMAGE",
                 "type": "IMAGE",
                 "links": [
-                  307
+                  305
                 ]
               },
               {
@@ -3717,9 +3653,9 @@
             "widgets_values_named": {}
           },
           {
-            "id": 204,
-            "type": "ImageFromBatch",
-            "title": "保留中间动作帧",
+            "id": 203,
+            "type": "ImageScale",
+            "title": "调整模型帧尺寸",
             "pos": [
               1240,
               4660
@@ -3729,68 +3665,7 @@
               130
             ],
             "flags": {},
-            "order": 18,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "ImageFromBatch"
-            },
-            "inputs": [
-              {
-                "name": "image",
-                "type": "IMAGE",
-                "link": 307
-              },
-              {
-                "name": "batch_index",
-                "type": "INT",
-                "link": null,
-                "widget": {
-                  "name": "batch_index"
-                }
-              },
-              {
-                "name": "length",
-                "type": "INT",
-                "link": 306,
-                "widget": {
-                  "name": "length"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "IMAGE",
-                "type": "IMAGE",
-                "links": [
-                  308
-                ]
-              }
-            ],
-            "widgets_values": [
-              1,
-              70
-            ],
-            "widgets_values_named": {
-              "batch_index": 1,
-              "length": 70
-            }
-          },
-          {
-            "id": 205,
-            "type": "ImageScale",
-            "title": "调整动作帧尺寸",
-            "pos": [
-              1550,
-              4660
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 19,
+            "order": 17,
             "mode": 0,
             "properties": {
               "cnr_id": "comfy-core",
@@ -3801,7 +3676,7 @@
               {
                 "name": "image",
                 "type": "IMAGE",
-                "link": 308
+                "link": 305
               },
               {
                 "name": "upscale_method",
@@ -3814,7 +3689,7 @@
               {
                 "name": "width",
                 "type": "INT",
-                "link": 345,
+                "link": 337,
                 "widget": {
                   "name": "width"
                 }
@@ -3822,7 +3697,7 @@
               {
                 "name": "height",
                 "type": "INT",
-                "link": 349,
+                "link": 339,
                 "widget": {
                   "name": "height"
                 }
@@ -3841,7 +3716,7 @@
                 "name": "IMAGE",
                 "type": "IMAGE",
                 "links": [
-                  312
+                  306
                 ]
               }
             ],
@@ -3859,222 +3734,11 @@
             }
           },
           {
-            "id": 206,
-            "type": "ImageScale",
-            "title": "调整首帧尺寸",
-            "pos": [
-              1550,
-              4890
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 20,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "ImageScale"
-            },
-            "inputs": [
-              {
-                "name": "image",
-                "type": "IMAGE",
-                "link": 309
-              },
-              {
-                "name": "upscale_method",
-                "type": "COMBO",
-                "link": null,
-                "widget": {
-                  "name": "upscale_method"
-                }
-              },
-              {
-                "name": "width",
-                "type": "INT",
-                "link": 346,
-                "widget": {
-                  "name": "width"
-                }
-              },
-              {
-                "name": "height",
-                "type": "INT",
-                "link": 350,
-                "widget": {
-                  "name": "height"
-                }
-              },
-              {
-                "name": "crop",
-                "type": "COMBO",
-                "link": null,
-                "widget": {
-                  "name": "crop"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "IMAGE",
-                "type": "IMAGE",
-                "links": [
-                  311
-                ]
-              }
-            ],
-            "widgets_values": [
-              "bicubic",
-              1920,
-              1080,
-              "center"
-            ],
-            "widgets_values_named": {
-              "upscale_method": "bicubic",
-              "width": 1920,
-              "height": 1080,
-              "crop": "center"
-            }
-          },
-          {
-            "id": 207,
-            "type": "ImageScale",
-            "title": "调整尾帧尺寸",
-            "pos": [
-              1550,
-              5110
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 21,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "ImageScale"
-            },
-            "inputs": [
-              {
-                "name": "image",
-                "type": "IMAGE",
-                "link": 310
-              },
-              {
-                "name": "upscale_method",
-                "type": "COMBO",
-                "link": null,
-                "widget": {
-                  "name": "upscale_method"
-                }
-              },
-              {
-                "name": "width",
-                "type": "INT",
-                "link": 347,
-                "widget": {
-                  "name": "width"
-                }
-              },
-              {
-                "name": "height",
-                "type": "INT",
-                "link": 351,
-                "widget": {
-                  "name": "height"
-                }
-              },
-              {
-                "name": "crop",
-                "type": "COMBO",
-                "link": null,
-                "widget": {
-                  "name": "crop"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "IMAGE",
-                "type": "IMAGE",
-                "links": [
-                  313
-                ]
-              }
-            ],
-            "widgets_values": [
-              "bicubic",
-              1920,
-              1080,
-              "center"
-            ],
-            "widgets_values_named": {
-              "upscale_method": "bicubic",
-              "width": 1920,
-              "height": 1080,
-              "crop": "center"
-            }
-          },
-          {
-            "id": 208,
-            "type": "BatchImagesNode",
-            "title": "首图 + 动作 + 尾图",
-            "pos": [
-              1860,
-              4660
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 22,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "BatchImagesNode"
-            },
-            "inputs": [
-              {
-                "name": "images.image0",
-                "type": "IMAGE",
-                "link": 311
-              },
-              {
-                "name": "images.image1",
-                "type": "IMAGE",
-                "link": 312
-              },
-              {
-                "name": "images.image2",
-                "type": "IMAGE",
-                "link": 313
-              }
-            ],
-            "outputs": [
-              {
-                "name": "IMAGE",
-                "type": "IMAGE",
-                "links": [
-                  314
-                ]
-              }
-            ],
-            "widgets_values": [],
-            "widgets_values_named": {}
-          },
-          {
-            "id": 209,
+            "id": 204,
             "type": "CreateVideo",
             "title": "24 fps 无声成片",
             "pos": [
-              2170,
+              1550,
               4660
             ],
             "size": [
@@ -4082,7 +3746,7 @@
               190
             ],
             "flags": {},
-            "order": 23,
+            "order": 18,
             "mode": 0,
             "properties": {
               "cnr_id": "comfy-core",
@@ -4093,7 +3757,7 @@
               {
                 "name": "images",
                 "type": "IMAGE",
-                "link": 314
+                "link": 306
               }
             ],
             "outputs": [
@@ -4101,7 +3765,7 @@
                 "name": "VIDEO",
                 "type": "VIDEO",
                 "links": [
-                  315
+                  307
                 ]
               }
             ],
@@ -4121,11 +3785,277 @@
             }
           },
           {
-            "id": 210,
+            "id": 205,
             "type": "PrimitiveInt",
             "title": "采样宽度",
             "pos": [
               -1320,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 19,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 330,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  331
+                ]
+              }
+            ],
+            "widgets_values": [
+              1024,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 1024,
+              "control_after_generate": "fixed"
+            }
+          },
+          {
+            "id": 206,
+            "type": "ComfyMathExpression",
+            "title": "采样宽度对齐",
+            "pos": [
+              -1320,
+              4450
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 20,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "ComfyMathExpression"
+            },
+            "inputs": [
+              {
+                "name": "values.a",
+                "type": "FLOAT,INT,BOOLEAN",
+                "link": 331
+              },
+              {
+                "name": "expression",
+                "type": "STRING",
+                "link": null,
+                "widget": {
+                  "name": "expression"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "FLOAT",
+                "type": "FLOAT",
+                "links": []
+              },
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  332
+                ]
+              },
+              {
+                "name": "BOOL",
+                "type": "BOOLEAN",
+                "links": []
+              }
+            ],
+            "widgets_values": [
+              "max(32, round(a / 32) * 32)"
+            ],
+            "widgets_values_named": {
+              "expression": "max(32, round(a / 32) * 32)"
+            }
+          },
+          {
+            "id": 207,
+            "type": "PrimitiveInt",
+            "title": "采样高度",
+            "pos": [
+              -1010,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 21,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 333,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  334
+                ]
+              }
+            ],
+            "widgets_values": [
+              576,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 576,
+              "control_after_generate": "fixed"
+            }
+          },
+          {
+            "id": 208,
+            "type": "ComfyMathExpression",
+            "title": "采样高度对齐",
+            "pos": [
+              -1010,
+              4450
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 22,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "ComfyMathExpression"
+            },
+            "inputs": [
+              {
+                "name": "values.a",
+                "type": "FLOAT,INT,BOOLEAN",
+                "link": 334
+              },
+              {
+                "name": "expression",
+                "type": "STRING",
+                "link": null,
+                "widget": {
+                  "name": "expression"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "FLOAT",
+                "type": "FLOAT",
+                "links": []
+              },
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  335
+                ]
+              },
+              {
+                "name": "BOOL",
+                "type": "BOOLEAN",
+                "links": []
+              }
+            ],
+            "widgets_values": [
+              "max(32, round(a / 32) * 32)"
+            ],
+            "widgets_values_named": {
+              "expression": "max(32, round(a / 32) * 32)"
+            }
+          },
+          {
+            "id": 209,
+            "type": "PrimitiveInt",
+            "title": "成片宽度",
+            "pos": [
+              -700,
+              4300
+            ],
+            "size": [
+              260,
+              130
+            ],
+            "flags": {},
+            "order": 23,
+            "mode": 0,
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0",
+              "Node name for S&R": "PrimitiveInt"
+            },
+            "inputs": [
+              {
+                "name": "value",
+                "type": "INT",
+                "link": 336,
+                "widget": {
+                  "name": "value"
+                }
+              }
+            ],
+            "outputs": [
+              {
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  337
+                ]
+              }
+            ],
+            "widgets_values": [
+              1920,
+              "fixed"
+            ],
+            "widgets_values_named": {
+              "value": 1920,
+              "control_after_generate": "fixed"
+            }
+          },
+          {
+            "id": 210,
+            "type": "PrimitiveInt",
+            "title": "成片高度",
+            "pos": [
+              -390,
               4300
             ],
             "size": [
@@ -4156,276 +4086,6 @@
                 "type": "INT",
                 "links": [
                   339
-                ]
-              }
-            ],
-            "widgets_values": [
-              1024,
-              "fixed"
-            ],
-            "widgets_values_named": {
-              "value": 1024,
-              "control_after_generate": "fixed"
-            }
-          },
-          {
-            "id": 211,
-            "type": "ComfyMathExpression",
-            "title": "采样宽度对齐",
-            "pos": [
-              -1320,
-              4450
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 25,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "ComfyMathExpression"
-            },
-            "inputs": [
-              {
-                "name": "values.a",
-                "type": "FLOAT,INT,BOOLEAN",
-                "link": 339
-              },
-              {
-                "name": "expression",
-                "type": "STRING",
-                "link": null,
-                "widget": {
-                  "name": "expression"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "FLOAT",
-                "type": "FLOAT",
-                "links": []
-              },
-              {
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  340
-                ]
-              },
-              {
-                "name": "BOOL",
-                "type": "BOOLEAN",
-                "links": []
-              }
-            ],
-            "widgets_values": [
-              "max(32, round(a / 32) * 32)"
-            ],
-            "widgets_values_named": {
-              "expression": "max(32, round(a / 32) * 32)"
-            }
-          },
-          {
-            "id": 212,
-            "type": "PrimitiveInt",
-            "title": "采样高度",
-            "pos": [
-              -1010,
-              4300
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 26,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "PrimitiveInt"
-            },
-            "inputs": [
-              {
-                "name": "value",
-                "type": "INT",
-                "link": 341,
-                "widget": {
-                  "name": "value"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  342
-                ]
-              }
-            ],
-            "widgets_values": [
-              576,
-              "fixed"
-            ],
-            "widgets_values_named": {
-              "value": 576,
-              "control_after_generate": "fixed"
-            }
-          },
-          {
-            "id": 213,
-            "type": "ComfyMathExpression",
-            "title": "采样高度对齐",
-            "pos": [
-              -1010,
-              4450
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 27,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "ComfyMathExpression"
-            },
-            "inputs": [
-              {
-                "name": "values.a",
-                "type": "FLOAT,INT,BOOLEAN",
-                "link": 342
-              },
-              {
-                "name": "expression",
-                "type": "STRING",
-                "link": null,
-                "widget": {
-                  "name": "expression"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "FLOAT",
-                "type": "FLOAT",
-                "links": []
-              },
-              {
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  343
-                ]
-              },
-              {
-                "name": "BOOL",
-                "type": "BOOLEAN",
-                "links": []
-              }
-            ],
-            "widgets_values": [
-              "max(32, round(a / 32) * 32)"
-            ],
-            "widgets_values_named": {
-              "expression": "max(32, round(a / 32) * 32)"
-            }
-          },
-          {
-            "id": 214,
-            "type": "PrimitiveInt",
-            "title": "成片宽度",
-            "pos": [
-              -700,
-              4300
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 28,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "PrimitiveInt"
-            },
-            "inputs": [
-              {
-                "name": "value",
-                "type": "INT",
-                "link": 344,
-                "widget": {
-                  "name": "value"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  345,
-                  346,
-                  347
-                ]
-              }
-            ],
-            "widgets_values": [
-              1920,
-              "fixed"
-            ],
-            "widgets_values_named": {
-              "value": 1920,
-              "control_after_generate": "fixed"
-            }
-          },
-          {
-            "id": 215,
-            "type": "PrimitiveInt",
-            "title": "成片高度",
-            "pos": [
-              -390,
-              4300
-            ],
-            "size": [
-              260,
-              130
-            ],
-            "flags": {},
-            "order": 29,
-            "mode": 0,
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.45.0",
-              "Node name for S&R": "PrimitiveInt"
-            },
-            "inputs": [
-              {
-                "name": "value",
-                "type": "INT",
-                "link": 348,
-                "widget": {
-                  "name": "value"
-                }
-              }
-            ],
-            "outputs": [
-              {
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  349,
-                  350,
-                  351
                 ]
               }
             ],
@@ -4478,12 +4138,12 @@
           },
           {
             "id": 4,
-            "title": "定帧与导出",
+            "title": "模型帧采样与导出",
             "bounding": [
               -80,
               4540,
-              2550,
-              770
+              1920,
+              650
             ],
             "color": "#3f789e",
             "flags": {}
@@ -4662,7 +4322,7 @@
             "id": 302,
             "origin_id": 130,
             "origin_slot": 0,
-            "target_id": 202,
+            "target_id": 201,
             "target_slot": 0,
             "type": "VIDEO"
           },
@@ -4670,36 +4330,28 @@
             "id": 303,
             "origin_id": 200,
             "origin_slot": 1,
-            "target_id": 202,
+            "target_id": 201,
             "target_slot": 1,
             "type": "INT"
           },
           {
             "id": 304,
-            "origin_id": 202,
+            "origin_id": 201,
             "origin_slot": 0,
-            "target_id": 203,
+            "target_id": 202,
             "target_slot": 0,
             "type": "VIDEO"
           },
           {
             "id": 305,
-            "origin_id": 200,
-            "origin_slot": 1,
-            "target_id": 201,
+            "origin_id": 202,
+            "origin_slot": 0,
+            "target_id": 203,
             "target_slot": 0,
-            "type": "INT"
+            "type": "IMAGE"
           },
           {
             "id": 306,
-            "origin_id": 201,
-            "origin_slot": 1,
-            "target_id": 204,
-            "target_slot": 2,
-            "type": "INT"
-          },
-          {
-            "id": 307,
             "origin_id": 203,
             "origin_slot": 0,
             "target_id": 204,
@@ -4707,73 +4359,81 @@
             "type": "IMAGE"
           },
           {
-            "id": 308,
+            "id": 307,
             "origin_id": 204,
-            "origin_slot": 0,
-            "target_id": 205,
-            "target_slot": 0,
-            "type": "IMAGE"
-          },
-          {
-            "id": 309,
-            "origin_id": -10,
-            "origin_slot": 3,
-            "target_id": 206,
-            "target_slot": 0,
-            "type": "IMAGE"
-          },
-          {
-            "id": 310,
-            "origin_id": -10,
-            "origin_slot": 4,
-            "target_id": 207,
-            "target_slot": 0,
-            "type": "IMAGE"
-          },
-          {
-            "id": 311,
-            "origin_id": 206,
-            "origin_slot": 0,
-            "target_id": 208,
-            "target_slot": 0,
-            "type": "IMAGE"
-          },
-          {
-            "id": 312,
-            "origin_id": 205,
-            "origin_slot": 0,
-            "target_id": 208,
-            "target_slot": 1,
-            "type": "IMAGE"
-          },
-          {
-            "id": 313,
-            "origin_id": 207,
-            "origin_slot": 0,
-            "target_id": 208,
-            "target_slot": 2,
-            "type": "IMAGE"
-          },
-          {
-            "id": 314,
-            "origin_id": 208,
-            "origin_slot": 0,
-            "target_id": 209,
-            "target_slot": 0,
-            "type": "IMAGE"
-          },
-          {
-            "id": 315,
-            "origin_id": 209,
             "origin_slot": 0,
             "target_id": -20,
             "target_slot": 0,
             "type": "VIDEO"
           },
           {
-            "id": 338,
+            "id": 330,
             "origin_id": -10,
             "origin_slot": 5,
+            "target_id": 205,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 331,
+            "origin_id": 205,
+            "origin_slot": 0,
+            "target_id": 206,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 332,
+            "origin_id": 206,
+            "origin_slot": 1,
+            "target_id": 131,
+            "target_slot": 5,
+            "type": "INT"
+          },
+          {
+            "id": 333,
+            "origin_id": -10,
+            "origin_slot": 6,
+            "target_id": 207,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 334,
+            "origin_id": 207,
+            "origin_slot": 0,
+            "target_id": 208,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 335,
+            "origin_id": 208,
+            "origin_slot": 1,
+            "target_id": 131,
+            "target_slot": 6,
+            "type": "INT"
+          },
+          {
+            "id": 336,
+            "origin_id": -10,
+            "origin_slot": 7,
+            "target_id": 209,
+            "target_slot": 0,
+            "type": "INT"
+          },
+          {
+            "id": 337,
+            "origin_id": 209,
+            "origin_slot": 0,
+            "target_id": 203,
+            "target_slot": 2,
+            "type": "INT"
+          },
+          {
+            "id": 338,
+            "origin_id": -10,
+            "origin_slot": 8,
             "target_id": 210,
             "target_slot": 0,
             "type": "INT"
@@ -4782,103 +4442,7 @@
             "id": 339,
             "origin_id": 210,
             "origin_slot": 0,
-            "target_id": 211,
-            "target_slot": 0,
-            "type": "INT"
-          },
-          {
-            "id": 340,
-            "origin_id": 211,
-            "origin_slot": 1,
-            "target_id": 131,
-            "target_slot": 5,
-            "type": "INT"
-          },
-          {
-            "id": 341,
-            "origin_id": -10,
-            "origin_slot": 6,
-            "target_id": 212,
-            "target_slot": 0,
-            "type": "INT"
-          },
-          {
-            "id": 342,
-            "origin_id": 212,
-            "origin_slot": 0,
-            "target_id": 213,
-            "target_slot": 0,
-            "type": "INT"
-          },
-          {
-            "id": 343,
-            "origin_id": 213,
-            "origin_slot": 1,
-            "target_id": 131,
-            "target_slot": 6,
-            "type": "INT"
-          },
-          {
-            "id": 344,
-            "origin_id": -10,
-            "origin_slot": 7,
-            "target_id": 214,
-            "target_slot": 0,
-            "type": "INT"
-          },
-          {
-            "id": 345,
-            "origin_id": 214,
-            "origin_slot": 0,
-            "target_id": 205,
-            "target_slot": 2,
-            "type": "INT"
-          },
-          {
-            "id": 346,
-            "origin_id": 214,
-            "origin_slot": 0,
-            "target_id": 206,
-            "target_slot": 2,
-            "type": "INT"
-          },
-          {
-            "id": 347,
-            "origin_id": 214,
-            "origin_slot": 0,
-            "target_id": 207,
-            "target_slot": 2,
-            "type": "INT"
-          },
-          {
-            "id": 348,
-            "origin_id": -10,
-            "origin_slot": 8,
-            "target_id": 215,
-            "target_slot": 0,
-            "type": "INT"
-          },
-          {
-            "id": 349,
-            "origin_id": 215,
-            "origin_slot": 0,
-            "target_id": 205,
-            "target_slot": 3,
-            "type": "INT"
-          },
-          {
-            "id": 350,
-            "origin_id": 215,
-            "origin_slot": 0,
-            "target_id": 206,
-            "target_slot": 3,
-            "type": "INT"
-          },
-          {
-            "id": 351,
-            "origin_id": 215,
-            "origin_slot": 0,
-            "target_id": 207,
+            "target_id": 203,
             "target_slot": 3,
             "type": "INT"
           }
@@ -4898,6 +4462,6 @@
       ]
     }
   },
-  "last_node_id": 215,
-  "last_link_id": 351
+  "last_node_id": 210,
+  "last_link_id": 339
 }

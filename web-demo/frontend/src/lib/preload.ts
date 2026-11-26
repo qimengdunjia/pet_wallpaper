@@ -1,7 +1,8 @@
+// 文件用途：预加载图片与视频，并共享已检查的媒体资源。
 import type { AssetVersionManifest } from "@/types";
 
 const MAX_VIDEO_BLOBS = 32;
-const videoBlobCache = new Map<string, string>();
+const videoBlobCache = new Map<string, { objectUrl: string; blob: Blob }>();
 const pendingVideoBlobs = new Map<string, Promise<string>>();
 
 export function preloadImage(url: string, timeoutMs = 8000): Promise<void> {
@@ -72,36 +73,36 @@ export function preloadVideoMetadata(url: string, timeoutMs = 8000): Promise<voi
 
 /** 获取已缓存的本地 Blob 播放地址；尚未缓存时回退原 URL。 */
 export function getPlayableVideoUrl(url: string): string {
-  return videoBlobCache.get(url) ?? url;
+  return videoBlobCache.get(url)?.objectUrl ?? url;
 }
 
 /** 清空内存中的视频 Blob 缓存（主要用于测试隔离）。 */
 export function clearVideoBlobCache(): void {
-  for (const blobUrl of videoBlobCache.values()) {
+  for (const { objectUrl } of videoBlobCache.values()) {
     if (typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
-      URL.revokeObjectURL(blobUrl);
+      URL.revokeObjectURL(objectUrl);
     }
   }
   videoBlobCache.clear();
   pendingVideoBlobs.clear();
 }
 
-function rememberVideoBlob(url: string, objectUrl: string): void {
+function rememberVideoBlob(url: string, objectUrl: string, blob: Blob): void {
   if (videoBlobCache.has(url)) {
     const prev = videoBlobCache.get(url);
     videoBlobCache.delete(url);
-    if (prev && prev !== objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
-      URL.revokeObjectURL(prev);
+    if (prev && prev.objectUrl !== objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(prev.objectUrl);
     }
   }
-  videoBlobCache.set(url, objectUrl);
+  videoBlobCache.set(url, { objectUrl, blob });
   while (videoBlobCache.size > MAX_VIDEO_BLOBS) {
     const oldestKey = videoBlobCache.keys().next().value;
     if (!oldestKey) break;
     const oldestVal = videoBlobCache.get(oldestKey);
     videoBlobCache.delete(oldestKey);
     if (oldestVal && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
-      URL.revokeObjectURL(oldestVal);
+      URL.revokeObjectURL(oldestVal.objectUrl);
     }
   }
 }
@@ -118,7 +119,7 @@ export function preloadVideoBlob(url: string, timeoutMs = 20000): Promise<string
     // 刷新 LRU 顺序
     videoBlobCache.delete(url);
     videoBlobCache.set(url, cached);
-    return Promise.resolve(cached);
+    return Promise.resolve(cached.objectUrl);
   }
   const pending = pendingVideoBlobs.get(url);
   if (pending) {
@@ -157,7 +158,7 @@ export function preloadVideoBlob(url: string, timeoutMs = 20000): Promise<string
         URL.revokeObjectURL(objectUrl);
         throw err;
       }
-      rememberVideoBlob(url, objectUrl);
+      rememberVideoBlob(url, objectUrl, blob);
       return objectUrl;
     } finally {
       if (timer !== null && typeof window !== "undefined") {
@@ -169,6 +170,14 @@ export function preloadVideoBlob(url: string, timeoutMs = 20000): Promise<string
 
   pendingVideoBlobs.set(url, task);
   return task;
+}
+
+/** 根据视频地址返回已预加载的原始字节，供连续视频的缓冲区使用。 */
+export async function readPreloadedVideoBytes(url: string): Promise<ArrayBuffer> {
+  await preloadVideoBlob(url);
+  const blob = videoBlobCache.get(url)?.blob;
+  if (!blob) throw new Error("过场视频预加载失败");
+  return blob.arrayBuffer();
 }
 
 /** 在后台静默预加载一套壁纸的全部视频（首屏直接展示默认/历史壁纸时使用）。 */

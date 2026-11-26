@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -413,6 +414,43 @@ def _loop_state(u: float) -> tuple[float, float, float, float, float]:
     return cat_x, dog_x, cat_phase, dog_phase, ground_offset
 
 
+def _fragmented_avc_codec(data: bytes) -> str | None:
+    """从分片 MP4 的初始化段提取 AVC 编码标识，普通 MP4 返回 None。"""
+    codec = None
+    offset = 0
+    while offset + 8 <= len(data):
+        size = int.from_bytes(data[offset:offset + 4], "big")
+        end = offset + size
+        if size < 8 or end > len(data):
+            return None
+        kind = data[offset + 4:offset + 8]
+        if kind == b"moov":
+            avcc = data.find(b"avcC\x01", offset + 8, end)
+            if avcc >= 0 and avcc + 8 <= end:
+                codec = f"avc1.{data[avcc + 5:avcc + 8].hex()}"
+        if kind == b"moof":
+            return codec
+        offset = end
+    return None
+
+
+def _transition_metadata(intro_path: Path, loop_path: Path) -> dict[str, dict]:
+    """返回过场规格、缓存版本及支持连续播放时的编码标识。"""
+    transitions = {}
+    for name, path in (("intro", intro_path), ("loop", loop_path)):
+        data = path.read_bytes()
+        info = {
+            "path": f"transitions/{path.name}",
+            **probe_video(path),
+            "sha256": hashlib.sha256(data).hexdigest(),
+        }
+        codec = _fragmented_avc_codec(data)
+        if codec:
+            info["mse_codec"] = codec
+        transitions[name] = info
+    return transitions
+
+
 def build_transitions(force_synthetic: bool = False) -> dict[str, dict]:
     """探测或重建 3 秒先导（intro-3s.mp4）和 7 秒追逐循环（chase-loop-7s.mp4）。"""
     trans_dir = ASSETS_DIR / "transitions"
@@ -421,10 +459,7 @@ def build_transitions(force_synthetic: bool = False) -> dict[str, dict]:
     loop_path = trans_dir / "chase-loop-7s.mp4"
 
     if not force_synthetic and intro_path.is_file() and loop_path.is_file():
-        return {
-            "intro": {"path": "transitions/intro-3s.mp4", **probe_video(intro_path)},
-            "loop": {"path": "transitions/chase-loop-7s.mp4", **probe_video(loop_path)},
-        }
+        return _transition_metadata(intro_path, loop_path)
 
     backdrop = _create_backdrop()
 
@@ -473,10 +508,7 @@ def build_transitions(force_synthetic: bool = False) -> dict[str, dict]:
 
     _encode_frames_ffmpeg(intro_frames, intro_path)
 
-    return {
-        "intro": {"path": "transitions/intro-3s.mp4", **probe_video(intro_path)},
-        "loop": {"path": "transitions/chase-loop-7s.mp4", **probe_video(loop_path)},
-    }
+    return _transition_metadata(intro_path, loop_path)
 
 
 def _normalize_video_1080p(src: Path, dst: Path) -> None:

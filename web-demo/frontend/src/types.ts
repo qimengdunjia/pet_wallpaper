@@ -54,6 +54,11 @@ export interface VideoAssetMeta {
   size_bytes: number;
 }
 
+type TransitionVideoMeta = VideoAssetMeta & {
+  sha256?: string; // 过场素材的内容版本，旧清单可以省略。
+  mse_codec?: string; // 分片 MP4 的编码标识，用于连续播放。
+};
+
 export interface AssetVersionManifest {
   version_id: string;
   version_number: number;
@@ -113,8 +118,8 @@ export interface AppConfig {
   max_upload_mb: number;
   decoration_backgrounds?: Record<DecorationBackground, string>;
   transitions: {
-    intro: VideoAssetMeta | null;
-    loop: VideoAssetMeta | null;
+    intro: TransitionVideoMeta | null;
+    loop: TransitionVideoMeta | null;
   };
   sample_uploads: {
     cat: string;

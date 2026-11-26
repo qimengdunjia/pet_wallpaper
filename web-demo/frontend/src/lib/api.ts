@@ -59,8 +59,15 @@ export function createIdempotencyKey(prefix = "gen"): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
+/** 读取 Demo 配置，并按素材内容版本更新过场地址，供预加载和播放器共用。 */
 export async function fetchConfig(): Promise<AppConfig> {
-  return requestJson<AppConfig>("/api/config");
+  const config = await requestJson<AppConfig>("/api/config");
+  for (const video of [config.transitions?.intro, config.transitions?.loop]) {
+    if (!video?.sha256) continue;
+    const separator = video.url.includes("?") ? "&" : "?";
+    video.url += `${separator}v=${encodeURIComponent(video.sha256)}`;
+  }
+  return config;
 }
 
 /** 用设置密码换取短期令牌，并返回当前生成设置。 */

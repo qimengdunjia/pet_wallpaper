@@ -1,8 +1,9 @@
 <!-- 文件用途：播放生成过场，展示任务进度，并提供生成或素材加载失败后的操作。 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { createIdempotencyKey, submitGeneration } from "@/lib/api";
 import { getPlayableVideoUrl, preloadVideoBlob } from "@/lib/preload";
+import ContinuousTransitionVideo from "@/components/ContinuousTransitionVideo.vue";
 import SeamlessLoopVideo from "@/components/SeamlessLoopVideo.vue";
 import {
   clearWaitingBatch,
@@ -17,11 +18,6 @@ import {
 import { findPetById, petState, upsertPet } from "@/stores/petStore";
 import { guardParkedAction, setRoute, showToast, systemState } from "@/stores/systemStore";
 
-type VideoWithRVFC = HTMLVideoElement & {
-  requestVideoFrameCallback?: (callback: (now: number, metadata: unknown) => void) => number;
-  cancelVideoFrameCallback?: (handle: number) => void;
-};
-
 const introRef = ref<HTMLVideoElement | null>(null);
 const introSrc = ref("");
 
@@ -30,11 +26,13 @@ const loopPlaying = ref(false);
 const introPlayCount = ref(0);
 const loopRound = ref(0);
 const retrying = ref(false);
+const useContinuous = ref(false);
+const playbackRevision = ref(0);
 
 let introFallbackTimer: number | null = null;
 let firstLoopTimer: number | null = null;
 let introRevealFallbackTimer: number | null = null;
-let introMonitor: { kind: "rvfc" | "raf"; id: number; el: VideoWithRVFC } | null = null;
+let introHandoffFrame: number | null = null;
 let enteringLoop = false;
 
 const introUrl = computed(
@@ -43,22 +41,22 @@ const introUrl = computed(
 const loopUrl = computed(
   () => systemState.config?.transitions?.loop?.url || "/api/assets/transitions/chase-loop-7s.mp4",
 );
+const continuousMimeType = computed(() => {
+  const transitions = systemState.config?.transitions;
+  const codec = transitions?.intro?.mse_codec;
+  if (!codec || codec !== transitions?.loop?.mse_codec || typeof MediaSource === "undefined") return "";
+  const mime = `video/mp4; codecs="${codec}"`;
+  return MediaSource.isTypeSupported(mime) ? mime : "";
+});
 
 const waitingJobs = computed(() => getWaitingJobs());
 const waitingError = computed(() => generationState.waitingError);
 
-function clearIntroMonitor() {
-  if (!introMonitor) return;
-  if (introMonitor.kind === "rvfc" && typeof introMonitor.el.cancelVideoFrameCallback === "function") {
-    introMonitor.el.cancelVideoFrameCallback(introMonitor.id);
-  } else if (introMonitor.kind === "raf") {
-    window.cancelAnimationFrame(introMonitor.id);
-  }
-  introMonitor = null;
-}
-
 function clearTimers() {
-  clearIntroMonitor();
+  if (introHandoffFrame !== null) {
+    window.cancelAnimationFrame(introHandoffFrame);
+    introHandoffFrame = null;
+  }
   if (introFallbackTimer !== null) {
     window.clearTimeout(introFallbackTimer);
     introFallbackTimer = null;
@@ -85,35 +83,21 @@ function finishIntroReveal() {
   }
 }
 
-function scheduleIntroMonitor() {
-  clearIntroMonitor();
-  const el = introRef.value as VideoWithRVFC | null;
-  if (!el || phase.value !== "intro" || enteringLoop) return;
-
-  const checkFrame = () => {
-    introMonitor = null;
-    if (phase.value !== "intro" || enteringLoop) return;
-    const dur = el.duration;
-    if (Number.isFinite(dur) && dur > 0.2 && dur - el.currentTime <= 0.055) {
+function watchIntroHandoff(video: HTMLVideoElement) {
+  introHandoffFrame = window.requestAnimationFrame(() => {
+    introHandoffFrame = null;
+    if (enteringLoop || waitingError.value) return;
+    if (video.duration - video.currentTime <= 0.018) {
       enterChaseLoop();
-      return;
+    } else {
+      watchIntroHandoff(video);
     }
-    scheduleIntroMonitor();
-  };
-
-  if (typeof el.requestVideoFrameCallback === "function") {
-    const id = el.requestVideoFrameCallback(checkFrame);
-    introMonitor = { kind: "rvfc", id, el };
-  } else {
-    const id = window.requestAnimationFrame(checkFrame);
-    introMonitor = { kind: "raf", id, el };
-  }
+  });
 }
 
 function enterChaseLoop() {
   if ((phase.value === "loop" && loopRound.value >= 1) || enteringLoop) return;
   enteringLoop = true;
-  clearIntroMonitor();
   if (introFallbackTimer !== null) {
     window.clearTimeout(introFallbackTimer);
     introFallbackTimer = null;
@@ -151,6 +135,47 @@ function handleLoopRound() {
   void onFirstLoopFinished();
 }
 
+function startFallbackIntro() {
+  introSrc.value = getPlayableVideoUrl(introUrl.value);
+  void preloadVideoBlob(loopUrl.value).catch(() => undefined);
+  if (!introSrc.value.startsWith("blob:")) {
+    void preloadVideoBlob(introUrl.value).catch(() => undefined);
+  }
+
+  // 等视频元素绑定预加载地址后再播放，避免地址更新取消先导的播放请求。
+  void nextTick(() => {
+    const intro = introRef.value;
+    if (!intro || phase.value !== "intro" || enteringLoop || waitingError.value) return;
+    intro.currentTime = 0;
+    void intro.play().catch(() => undefined);
+    watchIntroHandoff(intro);
+  });
+
+  introFallbackTimer = window.setTimeout(() => {
+    enterChaseLoop();
+  }, 3500);
+}
+
+function handleContinuousRound(round: number) {
+  const firstComplete = loopRound.value < 2 && round >= 2;
+  phase.value = "loop";
+  loopRound.value = round;
+  if (firstComplete) void onFirstLoopFinished();
+}
+
+function handleContinuousFailure() {
+  useContinuous.value = false;
+  if (phase.value === "intro") {
+    startFallbackIntro();
+    return;
+  }
+  enteringLoop = true;
+  loopPlaying.value = true;
+  if (loopRound.value === 1) {
+    firstLoopTimer = window.setTimeout(() => void onFirstLoopFinished(), 7300);
+  }
+}
+
 function startIntroSequence() {
   clearTimers();
   enteringLoop = false;
@@ -158,22 +183,9 @@ function startIntroSequence() {
   loopPlaying.value = false;
   introPlayCount.value = 1;
   loopRound.value = 0;
-
-  introSrc.value = getPlayableVideoUrl(introUrl.value);
-  void preloadVideoBlob(loopUrl.value).catch(() => undefined);
-  if (!introSrc.value.startsWith("blob:")) {
-    void preloadVideoBlob(introUrl.value).catch(() => undefined);
-  }
-
-  if (introRef.value) {
-    introRef.value.currentTime = 0;
-    introRef.value.play().catch(() => undefined);
-    scheduleIntroMonitor();
-  }
-
-  introFallbackTimer = window.setTimeout(() => {
-    enterChaseLoop();
-  }, 3500);
+  playbackRevision.value += 1;
+  useContinuous.value = Boolean(continuousMimeType.value);
+  if (!useContinuous.value) startFallbackIntro();
 
   if (systemState.cutoutStrategy === "immediate") {
     void evaluateWaitingBatch();
@@ -200,6 +212,7 @@ watch(() => systemState.alertVisible, (visible) => {
 watch(waitingError, (error) => {
   if (error) {
     clearTimers();
+    useContinuous.value = false;
     loopPlaying.value = false;
     introRef.value?.pause();
   }
@@ -286,26 +299,39 @@ function handleReturnHome() {
     :data-loop-round="loopRound"
   >
     <div class="transition-canvas-16x9 mastergo-cloud-sky" data-testid="transition-canvas">
-      <video
-        ref="introRef"
-        :src="introSrc || introUrl"
-        class="transition-video"
-        :class="{ visible: phase === 'intro' }"
-        muted
-        playsinline
-        preload="auto"
-        data-testid="transition-intro-video"
-        @ended="enterChaseLoop"
+      <ContinuousTransitionVideo
+        v-if="useContinuous"
+        :key="playbackRevision"
+        :intro-url="introUrl"
+        :loop-url="loopUrl"
+        :mime-type="continuousMimeType"
+        class="transition-video visible"
+        @round="handleContinuousRound"
+        @failed="handleContinuousFailure"
       />
-      <SeamlessLoopVideo
-        :src="loopUrl"
-        :playing="loopPlaying"
-        class="transition-video"
-        :class="{ visible: phase === 'loop' }"
-        test-id="transition-loop-video"
-        @first-frame="handleLoopFirstFrame"
-        @loop-round="handleLoopRound"
-      />
+      <template v-else>
+        <video
+          ref="introRef"
+          :src="introSrc || introUrl"
+          class="transition-video"
+          :class="{ visible: phase === 'intro' }"
+          muted
+          playsinline
+          preload="auto"
+          data-testid="transition-intro-video"
+          @ended="enterChaseLoop"
+        />
+        <SeamlessLoopVideo
+          :src="loopUrl"
+          :playing="loopPlaying"
+          use-prepared-frame
+          class="transition-video"
+          :class="{ visible: phase === 'loop' }"
+          test-id="transition-loop-video"
+          @first-frame="handleLoopFirstFrame"
+          @loop-round="handleLoopRound"
+        />
+      </template>
 
       <!-- 过场期间画布热区全部屏蔽 -->
       <div class="transition-shield" data-testid="transition-hotzone-shield" />

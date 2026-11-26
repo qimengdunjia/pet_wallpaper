@@ -1,6 +1,6 @@
 <!-- 文件用途：双缓冲交替循环视频组件，利用预解码备播层消除原生 loop 回跳卡顿。 -->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { getPlayableVideoUrl, preloadVideoBlob } from "@/lib/preload";
 
 type VideoWithRVFC = HTMLVideoElement & {
@@ -14,12 +14,14 @@ const props = withDefaults(
     poster?: string;
     playing?: boolean;
     resetOnPause?: boolean;
+    usePreparedFrame?: boolean; // 等待过场在段尾直接露出已解码的下一段首帧。
     testId?: string;
   }>(),
   {
     poster: undefined,
     playing: true,
     resetOnPause: true,
+    usePreparedFrame: false,
     testId: undefined,
   },
 );
@@ -103,6 +105,10 @@ function resetStandbyBuffer(idx: 0 | 1) {
   }
 }
 
+function hasPreparedFirstFrame(el: HTMLVideoElement | null): el is HTMLVideoElement {
+  return Boolean(el && el.readyState >= 2 && !el.seeking && el.currentTime < 0.02);
+}
+
 function scheduleMonitor() {
   clearMonitor();
   if (disposed || !props.playing || handoffInFlight) return;
@@ -115,14 +121,20 @@ function scheduleMonitor() {
     if (bufferRefs[activeIdx.value] !== el) return;
 
     const dur = el.duration;
-    if (Number.isFinite(dur) && dur > 0.2 && dur - el.currentTime <= 0.055) {
+    const standby = bufferRefs[activeIdx.value === 0 ? 1 : 0];
+    const remaining = dur - el.currentTime;
+    const handoff = props.usePreparedFrame
+      ? remaining <= 0.018 && hasPreparedFirstFrame(standby)
+      : remaining <= 0.055;
+    if (Number.isFinite(dur) && dur > 0.2 && handoff) {
       void performHandoff();
       return;
     }
     scheduleMonitor();
   };
 
-  if (typeof el.requestVideoFrameCallback === "function") {
+  // 显示刷新能覆盖最后一帧的在屏时间，媒体帧回调只在新帧出现时触发。
+  if (!props.usePreparedFrame && typeof el.requestVideoFrameCallback === "function") {
     const id = el.requestVideoFrameCallback(checkFrame);
     monitorHandle = { kind: "rvfc", id, el };
   } else {
@@ -168,15 +180,17 @@ async function performHandoff() {
     }
   }
 
-  try {
-    await nextEl.play();
-  } catch {
-    // 自动播放策略受限时仍保持流程不死锁
+  const showPreparedFrame = props.usePreparedFrame && hasPreparedFirstFrame(nextEl);
+  if (!showPreparedFrame) {
+    await nextEl.play().catch(() => undefined);
+    await waitForNextPaintedFrame(nextEl, 100);
   }
-  await waitForNextPaintedFrame(nextEl, 100);
   if (disposed || seq !== playbackSeq || !props.playing) return;
 
   activeIdx.value = nextIdx;
+  if (showPreparedFrame) {
+    void nextEl.play().catch(() => undefined);
+  }
   if (prevEl) {
     resetStandbyBuffer(prevIdx);
   }
@@ -197,13 +211,18 @@ async function startPlayback() {
   if (!el) return;
   if (latestBlobSrc && bufferSrcs.value[activeIdx.value] !== latestBlobSrc && el.paused) {
     bufferSrcs.value[activeIdx.value] = latestBlobSrc;
+    await nextTick();
   }
+  if (disposed || seq !== playbackSeq || !props.playing) return;
 
-  try {
-    await el.play();
-  } catch {
-    // noop
+  // 首帧已解码时直接显示，避免等待下一个绘制回调跳过这帧。
+  if (props.usePreparedFrame && hasPreparedFirstFrame(el)) {
+    emit("firstFrame");
+    void el.play().catch(() => undefined);
+    scheduleMonitor();
+    return;
   }
+  await el.play().catch(() => undefined);
   await waitForNextPaintedFrame(el, 120);
   if (disposed || seq !== playbackSeq || !props.playing) return;
   emit("firstFrame");

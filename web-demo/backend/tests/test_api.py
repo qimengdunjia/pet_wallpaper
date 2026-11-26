@@ -154,8 +154,9 @@ def test_pet_crud_and_photo_validation(tmp_path: Path):
     with TestClient(create_app(settings)) as client:
         cfg = client.get("/api/config").json()
         assert cfg["provider"] == "mock"
-        assert cfg["transitions"]["intro"]["duration"] == 3.0
-        assert cfg["transitions"]["loop"]["duration"] == 7.0
+        sources = json.loads((settings.assets_dir / "manifest.json").read_text(encoding="utf-8"))["transitions"]
+        for key in ("intro", "loop"):
+            assert cfg["transitions"][key]["duration"] == sources[key]["duration"]
 
         # 创建并更新宠物信息
         res = client.post(

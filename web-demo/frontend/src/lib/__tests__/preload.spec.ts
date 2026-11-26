@@ -6,6 +6,7 @@ import {
   clearVideoBlobCache,
   getPlayableVideoUrl,
   preloadVideoBlob,
+  readPreloadedVideoBytes,
   verifyAndPreloadAssets,
 } from "@/lib/preload";
 import type { AssetVersionManifest } from "@/types";
@@ -58,6 +59,24 @@ describe("video preload cache & seamless loop component", () => {
     URL.revokeObjectURL = originalRevokeObjectURL;
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+  });
+
+  it("reuses the preloaded response bytes without fetching its blob URL", async () => {
+    const url = "/api/assets/transitions/intro-3s.mp4";
+    const bytes = new Uint8Array([1, 2, 3]).buffer;
+    const blob = new Blob([bytes]);
+    Object.defineProperty(blob, "arrayBuffer", { value: vi.fn().mockResolvedValue(bytes) });
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      blob: async () => blob,
+    } as Response);
+
+    const [objectUrl, segment] = await Promise.all([preloadVideoBlob(url), readPreloadedVideoBytes(url)]);
+
+    expect(objectUrl).toBe("blob:mock-video-1");
+    expect(segment).toBe(bytes);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).toHaveBeenCalledWith(url, expect.anything());
   });
 
   it("caches and deduplicates video blob fetches and preloads all manifest videos", async () => {
