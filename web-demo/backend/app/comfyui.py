@@ -248,7 +248,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                 if stage == "portrait":
                     prompt = portrait_prompt(prompt)
                 elif decoration:
-                    prompt = styled_idle_prompt(prompt, decoration) if is_image else styled_video_prompt(prompt)
+                    prompt = styled_idle_prompt(prompt, decoration, pet["species"]) if is_image else styled_video_prompt(prompt)
                 size = (config[f"{kind}_width"], config[f"{kind}_height"])
                 prefix = f"pet_wallpaper_demo/{job_id}/{stage}"
                 if is_image:

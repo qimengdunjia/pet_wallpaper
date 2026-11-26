@@ -20,6 +20,12 @@ BACKGROUNDS = {
     "blue": "#A3CEF7",
     "lavender": "#C8C2F5",
 }
+BACKGROUND_NAMES = {
+    "cream": "米白色",
+    "pink": "浅粉色",
+    "blue": "浅蓝色",
+    "lavender": "浅紫色",
+}
 ACCESSORY_NAMES = {
     "none": "无配饰",
     "bow-tie": "蝴蝶结",
@@ -53,23 +59,56 @@ def portrait_prompt(base_prompt: str = "") -> str:
     )
 
 
-def styled_idle_prompt(base_prompt: str, decoration: dict) -> str:
-    """按工作流的双参考图分工，将已有提示词和已确认装扮组装成待机图提示词。"""
-    background = BACKGROUNDS[decoration["background"]]
-    accessory = decoration["accessory"]
-    accessory_rule = "动物不佩戴任何配饰。" if accessory == "none" else (
-        f"<Picture 2> 是{ACCESSORY_NAMES[accessory]}的唯一参考。去除该图原有背景，将配饰佩戴在宠物对应位置。"
-        "保留配饰的外形、结构和主色调，按宠物比例自然贴合，保持遮挡和阴影合理。"
-        "配饰的图像媒介、材质、边缘处理和细节精度需要与 <Picture 1> 的主体一致。"
-    )
+def styled_idle_prompt(base_prompt: str, decoration: dict, species: str | None = None) -> str:
+    """按物种和已确认的背景与配饰组装待机图提示词。"""
+    bg_key = decoration["background"]
+    bg = f"{BACKGROUNDS[bg_key]}（{BACKGROUND_NAMES[bg_key]}）"
+    is_dog = species == "dog" or (not species and "狗狗" in base_prompt)
+    pet = "狗狗" if is_dog else "猫咪"
+    has_accessory = decoration["accessory"] != "none"
+
+    if is_dog:
+        pose_and_expression = (
+            "构图与姿态：狗狗位于画面正中央，只露出头部、颈部和少量胸部，两只前爪自然对称地搭在画面下方纯黑色色块（#000000）的上沿，身体其余部分隐藏在纯黑色色块后方。"
+            "狗狗正视镜头，头部端正，不歪头、不侧身；鼻尖、双眼中心与画面竖直中轴线对齐，整体呈现自然的左右对称感。\n\n"
+            "面部表情：狗狗呈现开心、兴奋、活泼且亲切的状态，仿佛正开心地看着前方。嘴巴自然微微张开，嘴角轻轻上扬呈微笑神态，舌头从嘴巴正中轻轻露出一小截舌尖，保持自然放松；"
+            "双眼自然睁开，完全沿用 <Picture 1> 的眼睛造型、大小、配色与表现方式，眼神明亮友善。避免夸张大张嘴、过度吐舌、明显露齿或凶狠表情，舌头不要明显偏向左侧或右侧。"
+        )
+    else:
+        pose_and_expression = (
+            "构图与姿态：猫咪位于画面正中央，只露出头部、颈部和少量胸部，两只前爪自然对称地搭在画面下方纯黑色色块（#000000）的上沿，身体其余部分隐藏在纯黑色色块后方。"
+            "猫咪正视镜头，头部端正，不歪头、不侧身；鼻尖、双眼中心与画面竖直中轴线对齐，整体呈现自然的左右对称感。"
+            "嘴巴自然闭合，保持 <Picture 1> 原有的面部结构与自然放松的神态；双眼自然睁开，完全沿用 <Picture 1> 的眼睛造型、大小、配色与表现方式。"
+        )
+
+    if has_accessory:
+        intro_tail = f"新场景中，并在{pet}身上清晰佩戴 <Picture 2> 中的装饰物，且装饰物的视觉风格与 <Picture 1> {pet}主体完全一致。"
+        subject_extra = "不做任何风格改动；除必须佩戴在身上的 <Picture 2> 装饰外，不擅自添加 <Picture 1> 中不存在的纹理、花纹或额外特征。"
+        accessory_section = (
+            f"\n\n装饰必须佩戴且风格与 <Picture 1> 主体一致：提取 <Picture 2> 中的装饰物（去除 <Picture 2> 原有背景），"
+            f"必须清晰、完整地佩戴在{pet}身上最合理的对应位置（如帽子戴在头顶并自然贴合或避让耳朵，围巾、项圈或领结戴在颈部，眼镜戴在眼部等），绝对不可遗漏或省略。"
+            f"保留 <Picture 2> 装饰物的外形轮廓、结构特征与主色调，按{pet}头身比例精准缩放贴合，呈现自然的遮挡关系与贴合阴影；"
+            f"装饰物的视觉风格、图像媒介、表面材质质感、抽象程度、边缘轮廓特征与细节精细度必须 100% 转化为与 <Picture 1> 中的{pet}主体完全一致，"
+            f"表面平整干净、质感自然，与{pet}主体浑然一体。"
+        )
+        blend_subject = f"佩戴 <Picture 2> 装饰的{pet}"
+        cleanup = "去除 <Picture 1> 和 <Picture 2> 原有的背景与多余元素。除 <Picture 2> 指定的装饰外，画面中无其他道具、无其他动物、无人物、无文字、无水印。"
+    else:
+        intro_tail = "新场景中。"
+        subject_extra = "不做任何风格改动，不擅自添加 <Picture 1> 中不存在的纹理、花纹或额外特征。"
+        accessory_section = ""
+        blend_subject = pet
+        cleanup = "去除 <Picture 1> 原有的背景与多余装饰物。画面中无其他道具、无其他动物、无文字、无水印。"
+
     return (
-        f"以下图像要求优先于补充描述。仅以用户原照 <Picture 1> 中的动物为唯一主体。"
-        "严格保留原照的轮廓与头脸比例、五官、眼耳形状、颜色花纹、纹理和视觉风格，不做写实化或卡通化转绘。"
-        f"背景为干净、均匀的纯色 {background}。{accessory_rule}"
-        "横向 16:9 构图，画面最下方约 10% 是横贯画面的纯黑色块，边缘平直。"
-        "动物正面居中，只露头、颈、少量胸部和双前爪。两只前爪自然对称搭在黑色块上沿，其余身体在色块后方。"
-        "头部端正，眼睛自然睁开，保持原照面部结构和神态。去除原照背景，无其他动物、人物、文字或水印。"
-        f"\n补充描述：{base_prompt}"
+        f"保持与 <Picture 1> 完全一致的视觉风格、图像媒介、表面质感、抽象程度、边缘轮廓特征与色彩体系，将 <Picture 1> 中的{pet}作为唯一主体放入横向 16:9 的{intro_tail}\n\n"
+        f"主体严格还原：{pet}的外观必须与 <Picture 1> 一模一样，完全保留 <Picture 1> 中{pet}的轮廓造型、头脸比例、五官样式、眼睛形态大小与配色、配色分布、花纹图案、耳朵形状以及原本的表面质感与细节精细度，{subject_extra}"
+        f"{accessory_section}\n\n"
+        f"{pose_and_expression}\n\n"
+        f"场景与全局风格统一：背景为干净、均匀的{bg}，通透不杂乱；画面最下方 10% 高度为横向贯穿整个画面的纯黑色色块（#000000），边缘平直整齐。"
+        f"{bg}背景以及整体明暗光线必须 100% 沿用 <Picture 1> 原有的视觉风格、清晰度、材质纹理、轮廓特征与色彩饱和度来呈现，"
+        f"不出现与 <Picture 1> 不一致的模糊或风格割裂感，使{blend_subject}与干净的{bg}背景自然融为一体，全图如同原生于 <Picture 1> 的同一幅完整作品。\n\n"
+        f"{cleanup}"
     )
 
 

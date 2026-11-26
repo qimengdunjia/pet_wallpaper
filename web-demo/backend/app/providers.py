@@ -437,7 +437,7 @@ class KlingGenerationProvider(BaseGenerationProvider):
                 if portrait_only:
                     prompt = portrait_prompt(prompt)
                 elif decoration:
-                    prompt = styled_idle_prompt(prompt, decoration)
+                    prompt = styled_idle_prompt(prompt, decoration, pet["species"])
                 accessory_path = None
                 if decoration and decoration["accessory"] != "none":
                     accessory_path = self.settings.assets_dir / "decoration" / f"{decoration['accessory']}.webp"
