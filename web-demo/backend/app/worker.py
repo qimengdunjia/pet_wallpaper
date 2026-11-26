@@ -80,13 +80,32 @@ class GenerationWorker:
         self._tasks[job_id] = task
         task.add_done_callback(lambda _t, jid=job_id: self._tasks.pop(jid, None))
 
-    async def cancel_jobs(self, job_ids: list[str]) -> None:
-        """取消并等待属于已删除宠物的后台生成任务退出。"""
+    def _get_provider(self, mode: str) -> BaseGenerationProvider:
+        if mode not in self._providers:
+            self._providers[mode] = build_provider(replace(self.settings, provider=mode))
+        return self._providers[mode]
+
+    async def cancel_jobs(self, jobs: list[dict]) -> None:
+        """取消并等待属于已删除宠物的后台生成任务退出，并通知远端中止未完成任务。"""
+        job_ids = [job["id"] for job in jobs]
         tasks = [task for jid in job_ids if (task := self._tasks.get(jid)) is not None and not task.done()]
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+        active_jobs = [job for job in jobs if job.get("status") not in {"ready", "failed"}]
+        if active_jobs:
+            await asyncio.gather(
+                *(self._cancel_remote_job(job) for job in active_jobs),
+                return_exceptions=True,
+            )
+
+    async def _cancel_remote_job(self, job: dict) -> None:
+        try:
+            await self._get_provider(job["provider"]).cancel(job)
+        except Exception:
+            logger.warning("取消远端生成任务 %s 失败", job.get("id"), exc_info=True)
 
     async def _run_job(self, job_id: str) -> None:
         async with self._semaphore:
@@ -114,9 +133,7 @@ class GenerationWorker:
                 self.db.update_job_progress(job_id, status="generating", stage="idle", progress=max(job["progress"], 5))
                 # 任务按提交时的供应商执行，切换设置后仍可恢复原任务。
                 mode = job["provider"]
-                if mode not in self._providers:
-                    self._providers[mode] = build_provider(replace(self.settings, provider=mode))
-                idle_path, action_paths = await self._providers[mode].generate(
+                idle_path, action_paths = await self._get_provider(mode).generate(
                     job_runtime, pet, work_dir, persist_remote, update_progress
                 )
                 self.db.update_job_progress(job_id, status="generating", stage="validating", progress=96)

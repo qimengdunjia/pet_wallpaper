@@ -257,7 +257,7 @@ class DemoDatabase:
             if not pet_row:
                 return None
             job_rows = self._conn.execute(
-                "SELECT id, photo_path FROM generation_jobs WHERE pet_id = ?",
+                "SELECT * FROM generation_jobs WHERE pet_id = ?",
                 (pet_id,),
             ).fetchall()
             current_row = self._conn.execute(
@@ -274,6 +274,7 @@ class DemoDatabase:
         return {
             "pet_id": pet_id,
             "job_ids": [row["id"] for row in job_rows],
+            "jobs": [_row_to_job(row) for row in job_rows],
             "photo_paths": photo_paths,
             "was_current": bool(current_row and current_row["pet_id"] == pet_id),
         }

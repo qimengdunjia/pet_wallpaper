@@ -58,6 +58,10 @@ class BaseGenerationProvider:
     async def close(self) -> None:
         return None
 
+    async def cancel(self, job: dict) -> None:
+        """通知远端供应商中止未完成任务；默认无需额外操作。"""
+        return None
+
     async def generate(
         self,
         job: dict,

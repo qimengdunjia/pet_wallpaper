@@ -200,3 +200,99 @@ def test_resume_keeps_saved_endpoint_when_new_secondary_is_offline(tmp_path):
         assert set(videos) == {"idle-video", "left", "center", "right"}
 
     asyncio.run(run())
+
+
+def test_cancel_interrupts_running_and_deletes_pending_tasks_per_endpoint():
+    """删除未完成任务时，按实例核对队列，仅中断运行中目标任务并删除本任务的排队项。"""
+    job = {
+        "id": "job-cancel-1",
+        "status": "generating",
+        "generation_config": {"comfyui_base_url": PRIMARY},
+        "remote_tasks": {
+            "idle": {"state": "complete", "provider_id": "done-idle", "base_url": PRIMARY},
+            "idle-video": {"state": "running", "provider_id": "run-primary", "base_url": PRIMARY},
+            "left": {"state": "running", "provider_id": "pend-primary", "base_url": PRIMARY},
+            "center": {"state": "submitting", "provider_id": "run-secondary", "base_url": SECONDARY},
+            "right": {"state": "running", "provider_id": "already-finished", "base_url": PRIMARY},
+        },
+    }
+
+    async def run():
+        actions: list[tuple[str, str, str, dict | None]] = []
+
+        async def handle(request: httpx.Request) -> httpx.Response:
+            host = request.url.host
+            path = request.url.path
+            body = json.loads(request.content.decode("utf-8")) if request.content else None
+            actions.append((host, request.method, path, body))
+            if request.method == "GET" and path == "/queue":
+                if host == "primary":
+                    return httpx.Response(
+                        200,
+                        json={
+                            "queue_running": [[0, "run-primary", {}, {}, []]],
+                            "queue_pending": [[1, "pend-primary", {}, {}, []], [2, "other-pending", {}, {}, []]],
+                        },
+                    )
+                return httpx.Response(
+                    200,
+                    json={
+                        "queue_running": [[0, "run-secondary", {}, {}, []]],
+                        "queue_pending": [[1, "other-pet", {}, {}, []]],
+                    },
+                )
+            if request.method == "POST" and path in {"/queue", "/interrupt"}:
+                return httpx.Response(200)
+            return httpx.Response(404)
+
+        settings = Settings(comfyui_base_url=PRIMARY, comfyui_secondary_base_url=SECONDARY)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            provider = ComfyUIGenerationProvider(settings, client=client)
+            await provider.cancel(job)
+
+        assert ("primary", "POST", "/queue", {"delete": ["pend-primary"]}) in actions
+        assert ("primary", "POST", "/interrupt", {"prompt_id": "run-primary"}) in actions
+        assert ("secondary", "POST", "/interrupt", {"prompt_id": "run-secondary"}) in actions
+        assert not any(path == "/queue" and method == "POST" and host == "secondary" for host, method, path, _ in actions)
+
+    asyncio.run(run())
+
+
+def test_cancel_ignores_offline_comfyui_and_unrelated_running_task():
+    """实例离线或当前运行的是其他宠物任务时，不抛出异常且不误中断无关任务。"""
+    job = {
+        "id": "job-cancel-2",
+        "status": "generating",
+        "remote_tasks": {
+            "idle": {"state": "running", "provider_id": "my-idle", "base_url": PRIMARY},
+            "left": {"state": "running", "provider_id": "my-left", "base_url": SECONDARY},
+        },
+    }
+
+    async def run():
+        interrupt_hosts: list[str] = []
+
+        async def handle(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "primary":
+                raise httpx.ConnectError("connection refused", request=request)
+            if request.method == "GET" and request.url.path == "/queue":
+                return httpx.Response(
+                    200,
+                    json={
+                        "queue_running": [[0, "other-pet-task", {}, {}, []]],
+                        "queue_pending": [],
+                    },
+                )
+            if request.method == "POST" and request.url.path == "/interrupt":
+                interrupt_hosts.append(request.url.host)
+                return httpx.Response(200)
+            return httpx.Response(404)
+
+        settings = Settings(comfyui_base_url=PRIMARY, comfyui_secondary_base_url=SECONDARY)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            provider = ComfyUIGenerationProvider(settings, client=client)
+            await provider.cancel(job)
+
+        assert interrupt_hosts == []
+
+    asyncio.run(run())

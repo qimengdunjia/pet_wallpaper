@@ -409,7 +409,7 @@ def create_app(
         if not deleted:
             raise HTTPException(404, "宠物档案不存在")
 
-        await worker.cancel_jobs(deleted["job_ids"])
+        await worker.cancel_jobs(deleted["jobs"])
 
         shutil.rmtree(config.data_dir / "uploads" / pet_id, ignore_errors=True)
         for job_id in deleted["job_ids"]:

@@ -23,6 +23,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app import main as demo_main  # noqa: E402
+from app.comfyui import ComfyUIGenerationProvider  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.db import DemoDatabase  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -669,3 +670,60 @@ def test_delete_pet_cascades_files_current_wallpaper_and_cancels_jobs(tmp_path: 
         assert slow_deleted.json() == {"deleted_pet_id": slow_pet_id, "was_current": False}
         assert not (settings.data_dir / "uploads" / slow_pet_id).exists()
         assert not (settings.data_dir / "versions" / slow_job_id).exists()
+
+
+def test_delete_comfyui_pet_interrupts_remote_task(tmp_path: Path):
+    """删除正在使用 ComfyUI 生成的宠物时，取消本机轮询并向远端发送中断请求。"""
+    import threading
+
+    settings = Settings(
+        provider="comfyui",
+        data_dir=tmp_path / "data",
+        assets_dir=ASSETS_DIR,
+        frontend_dist=tmp_path / "no-dist",
+        comfyui_base_url="http://comfy-primary:8188",
+        comfyui_poll_seconds=0.05,
+        disable_worker_lock=True,
+    )
+    headers = {"X-Demo-Session": "sess-comfy-delete"}
+    prompt_submitted = threading.Event()
+    submitted_ids: list[str] = []
+    interrupt_payloads: list[dict] = []
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "POST" and path == "/upload/image":
+            return httpx.Response(200, json={"name": "pet.jpg"})
+        if request.method == "POST" and path == "/prompt":
+            payload = json.loads(request.content.decode("utf-8"))
+            submitted_ids.append(payload["prompt_id"])
+            prompt_submitted.set()
+            return httpx.Response(200, json={"prompt_id": payload["prompt_id"]})
+        if request.method == "GET" and path.startswith("/history/"):
+            return httpx.Response(200, json={})
+        if request.method == "GET" and path == "/queue":
+            running = [[0, pid, {}, {}, []] for pid in submitted_ids]
+            return httpx.Response(200, json={"queue_running": running, "queue_pending": []})
+        if request.method == "POST" and path == "/interrupt":
+            interrupt_payloads.append(json.loads(request.content.decode("utf-8")))
+            return httpx.Response(200)
+        return httpx.Response(404)
+
+    provider = ComfyUIGenerationProvider(settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+    with TestClient(create_app(settings, provider=provider)) as client:
+        pet_id = client.post("/api/pets", json={"species": "cat", "name": "汤圆"}, headers=headers).json()["pet"]["id"]
+        job_id = client.post(
+            "/api/generations",
+            data={"pet_id": pet_id, "idempotency_key": "comfy-del-1"},
+            files={"photo": ("cat.jpg", _make_jpeg_bytes(), "image/jpeg")},
+            headers=headers,
+        ).json()["job"]["id"]
+        assert prompt_submitted.wait(timeout=3.0)
+
+        deleted = client.delete(f"/api/pets/{pet_id}", headers=headers)
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted_pet_id": pet_id, "was_current": False}
+        assert len(submitted_ids) == 1
+        assert interrupt_payloads == [{"prompt_id": submitted_ids[0]}]
+        assert not (settings.data_dir / "uploads" / pet_id).exists()
+        assert not (settings.data_dir / "versions" / job_id).exists()

@@ -19,8 +19,21 @@ from .config import Settings
 from .generation_settings import default_generation_settings
 from .providers import BaseGenerationProvider, PersistRemoteFn, ProgressFn, ProviderError
 
+# 待机图统一使用固定采样种子。
+IDLE_IMAGE_SEED = 49
 VIDEO_STAGES = (("idle-video", "idle", 40), ("left", "left", 55), ("center", "center", 70), ("right", "right", 85))
 logger = logging.getLogger(__name__)
+
+
+def _queue_prompt_ids(items: object) -> set[str]:
+    """从 ComfyUI 队列条目中提取 prompt_id 集合。"""
+    if not isinstance(items, list):
+        return set()
+    ids: set[str] = set()
+    for entry in items:
+        if isinstance(entry, (list, tuple)) and len(entry) >= 2 and isinstance(entry[1], str):
+            ids.add(entry[1])
+    return ids
 
 
 def _compress_reference(path: Path, max_bytes: int) -> BytesIO:
@@ -52,6 +65,67 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
     async def close(self) -> None:
         """关闭 ComfyUI HTTP 连接池，无返回值。"""
         await self.client.aclose()
+
+    async def _post_control(self, endpoint: str, **kwargs) -> None:
+        """向 ComfyUI 控制接口发送请求，允许空响应体。"""
+        try:
+            response = await self.client.request("POST", endpoint, timeout=5, **kwargs)
+            if response.status_code >= 400:
+                raise ProviderError(f"ComfyUI 接口返回 HTTP {response.status_code}")
+        except httpx.HTTPError as exc:
+            raise ProviderError("无法连接 ComfyUI 发送中断请求") from exc
+
+    async def _cancel_endpoint(self, endpoint: str, prompt_ids: list[str]) -> None:
+        """核对指定 ComfyUI 实例队列后，移除排队任务并中断当前运行中的目标任务。"""
+        try:
+            queue = await self._json("GET", f"{endpoint}/queue", timeout=5)
+        except ProviderError as exc:
+            logger.warning("查询 ComfyUI 队列状态失败（%s）：%s", endpoint, exc)
+            return
+
+        pending_ids = _queue_prompt_ids(queue.get("queue_pending"))
+        running_ids = _queue_prompt_ids(queue.get("queue_running"))
+        pending = [pid for pid in prompt_ids if pid in pending_ids]
+        running = [pid for pid in prompt_ids if pid in running_ids]
+
+        if pending:
+            try:
+                await self._post_control(f"{endpoint}/queue", json={"delete": pending})
+            except ProviderError as exc:
+                logger.warning("移除 ComfyUI 排队任务失败（%s）：%s", endpoint, exc)
+
+        for pid in running:
+            try:
+                await self._post_control(f"{endpoint}/interrupt", json={"prompt_id": pid})
+            except ProviderError as exc:
+                logger.warning("中断 ComfyUI 运行任务失败（%s, %s）：%s", endpoint, pid, exc)
+
+    async def cancel(self, job: dict) -> None:
+        """主动清理远端 ComfyUI 队列中属于该任务的待执行与运行中阶段。"""
+        if job.get("status") in {"ready", "failed"}:
+            return
+        remote = job.get("remote_tasks") or {}
+        if not isinstance(remote, dict) or not remote:
+            return
+        config = job.get("generation_config") or {}
+        idle_record = remote.get("idle") if isinstance(remote.get("idle"), dict) else {}
+        default_base = config.get("comfyui_base_url") or idle_record.get("base_url") or self.settings.comfyui_base_url
+
+        by_endpoint: dict[str, list[str]] = defaultdict(list)
+        for record in remote.values():
+            if not isinstance(record, dict) or record.get("state") == "complete":
+                continue
+            prompt_id = record.get("provider_id")
+            if not isinstance(prompt_id, str) or not prompt_id:
+                continue
+            endpoint = record.get("base_url") or default_base
+            if endpoint and prompt_id not in by_endpoint[endpoint]:
+                by_endpoint[endpoint].append(prompt_id)
+
+        if by_endpoint:
+            await asyncio.gather(
+                *(self._cancel_endpoint(endpoint, prompt_ids) for endpoint, prompt_ids in by_endpoint.items())
+            )
 
     async def _json(self, method: str, endpoint: str, **kwargs) -> dict:
         try:
@@ -151,7 +225,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
         prompts = config["prompts"]
         prompts = prompts.get(pet["species"], prompts)
         job_id = job["id"]
-        seed = int(job_id[:12], 16)
+        video_seed = int(job_id[:12], 16)
         current_progress = job.get("progress", 0)
 
         async def advance(stage: str, progress: int) -> None:
@@ -161,7 +235,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                 await update_progress(stage, progress)
 
         async def render(
-            endpoint: str, stage: str, prompt_key: str, seed_offset: int, target: Path, reference: str | None,
+            endpoint: str, stage: str, prompt_key: str, seed: int, target: Path, reference: str | None,
         ) -> Path:
             record = remote.get(stage) or {}
             if not record.get("provider_id"):
@@ -169,7 +243,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                 kind = "image" if is_image else "video"
                 build = image_workflow if is_image else video_workflow
                 graph = build(reference, prompts[prompt_key], (config[f"{kind}_width"], config[f"{kind}_height"]),
-                              seed + seed_offset, f"pet_wallpaper_demo/{job_id}/{stage}")
+                              seed, f"pet_wallpaper_demo/{job_id}/{stage}")
                 task_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"pet-wallpaper-demo/{job_id}/{stage}"))
                 # 提交前落盘实例地址与任务 ID，重启后继续向原实例查询。
                 record = remote[stage] = {"state": "submitting", "provider_id": task_id, "base_url": endpoint}
@@ -204,7 +278,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
             image_endpoint = idle_record.get("base_url", base)
             async with self._endpoint_locks[image_endpoint]:
                 await advance("idle", 20)
-                await render(image_endpoint, "idle", "image", 20, idle, photo)
+                await render(image_endpoint, "idle", "image", IDLE_IMAGE_SEED, idle, photo)
         reference = remote["idle"].get("output_reference")
         # 旧任务没有记录远端成品路径，仍可使用已下载的待机图恢复。
         if not reference and any(not remote.get(stage, {}).get("provider_id") for stage, _, _ in VIDEO_STAGES):
@@ -253,7 +327,7 @@ class ComfyUIGenerationProvider(BaseGenerationProvider):
                     started += 1
                     await advance(stage, progress)
                     target = output_dir / f"{stage}.mp4"
-                    videos[stage] = await render(endpoint, stage, prompt_key, seed_offset, target, reference)
+                    videos[stage] = await render(endpoint, stage, prompt_key, video_seed + seed_offset, target, reference)
 
         tasks = [asyncio.create_task(run_endpoint(endpoint)) for endpoint in dict.fromkeys((*endpoints, *recovering))]
         try:
