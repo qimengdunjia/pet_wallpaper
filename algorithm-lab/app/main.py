@@ -186,6 +186,11 @@ def create_app(settings: Settings | None = None, provider=None) -> FastAPI:
                 "default_video_options": DEFAULT_VIDEO_OPTIONS.model_dump(),
                 "image_presets": IMAGE_PRESETS, "video_presets": VIDEO_PRESETS}
 
+    @application.get("/api/account/quota")
+    async def account_quota(refresh: bool = False):
+        """读取可灵资源包剩余额度与本机累计花费；参数 refresh 控制是否强制向远端刷新。"""
+        return await service.get_quota(force_refresh=refresh)
+
     @application.get("/api/jobs")
     async def list_jobs(kind: JobKind = "image"):
         """列出本机历史任务；参数为任务类型，返回该类型最近 50 条公开状态。"""

@@ -2,6 +2,7 @@
 
 import base64
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -9,6 +10,7 @@ from urllib.parse import quote, urlparse
 import httpx
 from PIL import Image
 
+from .billing import extract_task_cost, normalize_resource_packs
 from .config import Settings
 from .image import DEFAULT_IMAGE_OPTIONS, STANDARD_IMAGE_MODEL, ImageOptions
 from .video import DEFAULT_VIDEO_OPTIONS, OMNI_VIDEO_MODEL, VideoOptions
@@ -32,11 +34,12 @@ class SubmissionUnknown(ProviderError):
 
 @dataclass
 class RemoteTask:
-    """统一远端任务结果；state 为状态，url 为临时成品地址，message 为简短原因。"""
+    """统一远端任务结果；state 为状态，url 为临时成品地址，message 为简短原因，cost 为接口返回的扣费信息。"""
 
     state: str
     url: str | None = None  # 临时远端链接仅保存于后端状态文件。
     message: str = ""
+    cost: dict | None = None
 
 
 class KlingProvider:
@@ -180,15 +183,37 @@ class KlingProvider:
             images = (task.get("task_result") or {}).get("images") or []
             url = images[0].get("url") if images else None
             message = task.get("task_status_msg", "")
+        cost = extract_task_cost(task)
         if state in {"succeed", "succeeded"}:
             if not url:
                 raise ProviderError("任务已完成但成品链接尚不可用，请继续查询原任务", True)
-            return RemoteTask("complete", str(url))
+            return RemoteTask("complete", str(url), cost=cost)
         if state == "failed":
-            return RemoteTask("failed", message=self._message(message) or "供应商生成失败")
+            return RemoteTask("failed", message=self._message(message) or "供应商生成失败", cost=cost)
         if state not in {"submitted", "processing"}:
             raise ProviderError("可灵返回未知任务状态，请继续查询原任务", True)
         return RemoteTask("running")
+
+    async def account_costs(self, *, start_time: int | None = None, end_time: int | None = None) -> list[dict]:
+        """查询账户资源包余量；参数为可选毫秒级起止时间戳，返回规范化资源包列表。"""
+        now_ms = int(time.time() * 1000)
+        resolved_end = end_time if end_time is not None else now_ms + 86400 * 1000
+        resolved_start = start_time if start_time is not None else max(0, resolved_end - 1095 * 86400 * 1000)
+        result = await self._request(
+            "GET", "/account/costs", params={"start_time": resolved_start, "end_time": resolved_end},
+        )
+        data = result.get("data")
+        if not isinstance(data, dict):
+            raise ProviderError("可灵额度查询响应结构异常", True)
+        if "code" in data and str(data.get("code")) != "0":
+            detail = self._message(data.get("msg") or data.get("message") or "额度查询失败")
+            raise ProviderError(f"可灵额度查询错误 {data.get('code')}：{detail}", True)
+        infos = data.get("resource_pack_subscribe_infos")
+        if infos is None:
+            infos = []
+        if not isinstance(infos, list):
+            raise ProviderError("可灵额度查询资源包列表异常", True)
+        return normalize_resource_packs(infos)
 
     async def download(self, stage: str, url: str, target: Path) -> dict:
         """下载并校验成品；参数为阶段、远端 URL、无后缀路径，返回本地文件登记信息。"""

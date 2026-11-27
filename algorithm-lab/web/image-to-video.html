@@ -19,16 +19,35 @@
         <span>宠物壁纸测试台</span>
         <span id="service-pill" class="service-pill" aria-live="polite">连接中…</span>
       </a>
-      <nav class="lab-tabs" aria-label="功能切换">
-        <a href="/image-to-image">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-          图生图
-        </a>
-        <a href="/image-to-video" aria-current="page">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
-          图生视频
-        </a>
-      </nav>
+      <div class="topbar-actions">
+        <div id="quota-widget" class="quota-widget">
+          <div class="quota-pill-group">
+            <button type="button" id="quota-pill" class="quota-pill" aria-expanded="false" aria-controls="quota-popover" title="查看可灵 API 剩余额度与累计花费">
+              <span class="quota-icon" aria-hidden="true">◈</span>
+              <span id="quota-text">额度查询中…</span>
+            </button>
+            <button type="button" id="quota-refresh" class="quota-refresh-btn" title="刷新可灵剩余额度" aria-label="刷新可灵剩余额度">↻</button>
+          </div>
+          <div id="quota-popover" class="quota-popover" role="dialog" aria-label="可灵 API 额度与花费统计" hidden>
+            <div class="quota-popover-header">
+              <strong>可灵 API 额度与花费</strong>
+              <button type="button" id="quota-close" class="text-button" aria-label="关闭额度面板">✕</button>
+            </div>
+            <div id="quota-popover-body" class="quota-popover-body"></div>
+            <p id="quota-popover-foot" class="quota-popover-foot"></p>
+          </div>
+        </div>
+        <nav class="lab-tabs" aria-label="功能切换">
+          <a href="/image-to-image">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            图生图
+          </a>
+          <a href="/image-to-video" aria-current="page">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
+            图生视频
+          </a>
+        </nav>
+      </div>
     </div>
   </header>
 
@@ -171,7 +190,7 @@
         <div class="panel-submit">
           <p id="submit-hint" class="submit-hint" hidden></p>
           <button class="primary" id="start" disabled>生成视频</button>
-          <p class="credit-note">每次提交使用可灵账户额度生成一段视频</p>
+          <p id="video-credit-note" class="credit-note">每次提交使用可灵账户额度生成一段视频</p>
         </div>
       </section>
 
@@ -215,6 +234,7 @@
             <div class="card-heading-left">
               <h3>成片预览</h3>
               <span id="video-description" class="spec-chip" hidden></span>
+              <span id="cost-chip" class="cost-chip" hidden></span>
             </div>
             <span class="badge">待生成</span>
           </div>
@@ -255,6 +275,7 @@
               <strong>本次提示词与输入帧</strong>
               <button type="button" class="text-button" id="load-job-prompt">载入提示词到编辑区</button>
             </div>
+            <p id="job-cost-detail" class="job-cost-detail" hidden></p>
             <p id="job-prompt"></p>
             <ol id="job-frames-recap" class="reference-list compact" aria-label="本次首尾帧"></ol>
             <ol id="job-video-references" class="reference-list compact" aria-label="本次额外参考图" hidden></ol>

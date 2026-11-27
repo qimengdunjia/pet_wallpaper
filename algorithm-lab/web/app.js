@@ -35,6 +35,10 @@ let promptsLoaded = false;
 let savingPrompt = false;
 let comparingOriginal = false;
 let activePresetTab = null; // 当前高亮的一级分类，辅助无子项或自存切换。
+let quotaData = null;
+let loadingQuota = false;
+let quotaPopoverOpen = false;
+let recentJobs = [];
 
 function busy() {
   return requesting || config.busy || ["queued", "running"].includes(currentJob?.status);
@@ -118,6 +122,314 @@ function openLightbox(src, alt = "", onClose = null) {
 
 function dateLabel(value) {
   return new Date(value).toLocaleString("zh-CN", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+}
+
+function formatDay(ms) {
+  if (!Number.isFinite(Number(ms))) return "";
+  const d = new Date(Number(ms));
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatClock(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+}
+
+function formatNumber(num) {
+  const rounded = Math.round(num * 1e6) / 1e6;
+  return Object.is(rounded, -0) ? "0" : String(rounded);
+}
+
+function formatCashAmount(num, currency) {
+  const code = (currency || "").toUpperCase();
+  const clean = Math.round(num * 1e6) / 1e6;
+  const text = (code === "CNY" || code === "USD") && clean !== 0 && Math.abs(Math.round(clean * 100) - clean * 100) < 1e-9
+    ? clean.toFixed(2)
+    : formatNumber(clean);
+  if (code === "CNY") return `¥${text}`;
+  if (code === "USD") return `$${text}`;
+  return `余额 ${text}`;
+}
+
+function sumCostObjects(costs) {
+  let unit = 0;
+  let hasUnit = false;
+  const cash = Object.create(null);
+  let count = 0;
+  for (const cost of costs) {
+    if (!cost || typeof cost !== "object") continue;
+    let used = false;
+    if (cost.unit_amount !== null && cost.unit_amount !== undefined) {
+      const val = Number(cost.unit_amount);
+      if (Number.isFinite(val)) {
+        unit += val;
+        hasUnit = true;
+        used = true;
+      }
+    }
+    for (const [currency, rawVal] of Object.entries(cost.cash_amounts || {})) {
+      const val = Number(rawVal);
+      if (Number.isFinite(val)) {
+        cash[currency] = (cash[currency] || 0) + val;
+        used = true;
+      }
+    }
+    if (used) count++;
+  }
+  if (!count) return null;
+  const parts = [];
+  if (hasUnit && Math.round(unit * 1e6) !== 0) parts.push(`${formatNumber(unit)} Units`);
+  for (const [currency, val] of Object.entries(cash)) {
+    if (Math.round(val * 1e6) !== 0) parts.push(formatCashAmount(val, currency));
+  }
+  return {
+    recorded_count: count,
+    label: parts.length ? parts.join(" + ") : "0（未扣费）",
+  };
+}
+
+function matchingReferenceCost() {
+  if (!recentJobs.length) return null;
+  if (isVideo) {
+    const current = readVideoOptions();
+    const matched = recentJobs.find((job) =>
+      job.status === "complete" &&
+      job.stages?.[stage]?.current_cost &&
+      !job.stages[stage].current_cost.is_zero &&
+      job.video_options?.model === current.model &&
+      job.video_options?.duration === current.duration &&
+      job.video_options?.resolution === current.resolution
+    );
+    return matched?.stages?.[stage]?.current_cost?.label || null;
+  }
+  const current = readImageOptions();
+  const matched = recentJobs.find((job) =>
+    job.status === "complete" &&
+    job.stages?.[stage]?.current_cost &&
+    !job.stages[stage].current_cost.is_zero &&
+    job.image_options?.model === current.model &&
+    job.image_options?.resolution === current.resolution
+  );
+  return matched?.stages?.[stage]?.current_cost?.label || null;
+}
+
+function formatCostDetail(output, status) {
+  const currentCost = output?.current_cost;
+  const totalCost = output?.total_cost;
+  const attemptCost = output?.attempt?.cost;
+  const target = status === "failed" ? attemptCost : (currentCost || attemptCost || totalCost);
+  if (!target && !totalCost) return "";
+  const parts = [];
+  if (target) {
+    parts.push(`本次花费：${target.label}`);
+    const listPrices = Object.entries(target.list_price_amounts || {})
+      .filter(([cur, raw]) => {
+        const lp = Number(raw);
+        const actual = Number(target.cash_amounts?.[cur]);
+        return Number.isFinite(lp) && (!Number.isFinite(actual) || Math.abs(lp - actual) > 1e-9);
+      })
+      .map(([cur, raw]) => formatCashAmount(Number(raw), cur));
+    if (listPrices.length) parts.push(`目录价 ${listPrices.join(" + ")}`);
+    if (target.usage?.output_duration) parts.push(`计费时长 ${target.usage.output_duration}s`);
+  }
+  if (totalCost && (output?.attempt_count || 1) > 1) {
+    parts.push(`本任务累计 ${output.attempt_count} 次共花费：${totalCost.label}`);
+  }
+  return parts.join(" · ");
+}
+
+function renderQuota() {
+  const pill = $("#quota-pill");
+  const textEl = $("#quota-text");
+  const refreshBtn = $("#quota-refresh");
+  const popover = $("#quota-popover");
+  const body = $("#quota-popover-body");
+  const foot = $("#quota-popover-foot");
+  if (!pill || !textEl || !refreshBtn || !popover || !body || !foot) return;
+
+  pill.setAttribute("aria-expanded", String(quotaPopoverOpen));
+  popover.hidden = !quotaPopoverOpen;
+  refreshBtn.disabled = loadingQuota || !config.configured;
+  refreshBtn.classList.toggle("spinning", loadingQuota);
+
+  const onlinePacks = quotaData?.online_packs || [];
+  const allPacks = quotaData?.packs || [];
+  const localTotal = quotaData?.local_spend?.total?.label;
+
+  if (!("configured" in config) || (loadingQuota && !quotaData)) {
+    textEl.textContent = "额度查询中…";
+    pill.className = "quota-pill";
+  } else if (!config.configured) {
+    textEl.textContent = "未配置密钥";
+    pill.className = "quota-pill warn";
+  } else if (quotaData?.available) {
+    if (onlinePacks.length === 0) {
+      textEl.textContent = localTotal ? `无资源包 · 累计 ${localTotal}` : "无生效资源包";
+      pill.className = "quota-pill muted";
+    } else if (onlinePacks.length === 1) {
+      const pack = onlinePacks[0];
+      const low = pack.total_quantity > 0 && pack.remaining_quantity / pack.total_quantity <= 0.1;
+      textEl.textContent = `剩余 ${pack.remaining_text} / ${pack.total_text}`;
+      pill.className = `quota-pill ready${low ? " low" : ""}`;
+    } else {
+      const matching = onlinePacks.filter((pack) => pack.category === kind);
+      if (matching.length === 1) {
+        const pack = matching[0];
+        const low = pack.total_quantity > 0 && pack.remaining_quantity / pack.total_quantity <= 0.1;
+        textEl.textContent = `${isVideo ? "视频余量" : "图片余量"} ${pack.remaining_text}`;
+        pill.className = `quota-pill ready${low ? " low" : ""}`;
+      } else if (matching.length > 1) {
+        const sumRem = matching.reduce((acc, pack) => acc + (Number(pack.remaining_quantity) || 0), 0);
+        textEl.textContent = `${isVideo ? "视频余量" : "图片余量"} ${formatNumber(sumRem)}（${matching.length}包）`;
+        pill.className = "quota-pill ready";
+      } else {
+        textEl.textContent = `生效资源包 ${onlinePacks.length} 个`;
+        pill.className = "quota-pill ready";
+      }
+    }
+  } else if (onlinePacks.length > 0) {
+    textEl.textContent = `余量缓存 · ${onlinePacks[0].remaining_text}`;
+    pill.className = "quota-pill warn";
+  } else if (quotaData) {
+    textEl.textContent = localTotal ? `额度不可用 · 累计 ${localTotal}` : "额度查询失败";
+    pill.className = "quota-pill warn";
+  } else {
+    textEl.textContent = "查看额度";
+    pill.className = "quota-pill";
+  }
+
+  const children = [];
+  if (quotaData?.error) {
+    const errBox = document.createElement("div");
+    errBox.className = "quota-error-box";
+    errBox.textContent = quotaData.error;
+    children.push(errBox);
+  }
+
+  const packSection = document.createElement("div");
+  const packTitle = document.createElement("p");
+  packTitle.className = "quota-section-title";
+  packTitle.textContent = `可灵账户资源包（生效中 ${onlinePacks.length} 个）`;
+  packSection.append(packTitle);
+
+  if (!config.configured) {
+    const note = document.createElement("p");
+    note.className = "quota-empty-note";
+    note.textContent = "配置 KLING_API_KEY 并重启服务后，可查询可灵资源包余量。";
+    packSection.append(note);
+  } else if (allPacks.length === 0) {
+    const note = document.createElement("p");
+    note.className = "quota-empty-note";
+    note.textContent = quotaData?.error
+      ? "暂未获取到资源包数据，可点击右上刷新按钮重试。"
+      : "当前未查到预购资源包。若账户使用现金余额按量扣费，可灵暂无现金余额查询接口，请在下方与每次任务中核对扣费。";
+    packSection.append(note);
+  } else {
+    const tierLabels = {basic: "基础版", professional: "专业版", general: "通用版", flagship: "旗舰版"};
+    const statusText = {online: "生效中", toBeOnline: "待生效", expired: "已过期", runOut: "已耗尽"};
+    const list = document.createElement("div");
+    list.className = "quota-packs-list";
+    const sorted = [...allPacks].sort((a, b) => Number(b.status === "online") - Number(a.status === "online"));
+    for (const pack of sorted) {
+      const card = document.createElement("div");
+      card.className = `pack-card${pack.status === "online" ? "" : " inactive"}`;
+
+      const topRow = document.createElement("div");
+      topRow.className = "pack-top-row";
+      const nameEl = document.createElement("span");
+      nameEl.className = "pack-name";
+      nameEl.textContent = pack.name;
+      nameEl.title = pack.name;
+      const badge = document.createElement("span");
+      badge.className = `pack-status ${pack.status === "online" ? "online" : pack.status === "toBeOnline" ? "pending" : ""}`;
+      badge.textContent = statusText[pack.status] || pack.status || "未知";
+      topRow.append(nameEl, badge);
+      card.append(topRow);
+
+      const metaParts = [
+        tierLabels[pack.tier] || pack.tier,
+        pack.applicable_models,
+        pack.invalid_time ? `有效期至 ${formatDay(pack.invalid_time)}` : "",
+      ].filter(Boolean);
+      if (metaParts.length) {
+        const meta = document.createElement("div");
+        meta.className = "pack-meta";
+        meta.textContent = metaParts.join(" · ");
+        card.append(meta);
+      }
+
+      const progressRow = document.createElement("div");
+      progressRow.className = "pack-progress-row";
+      const progress = document.createElement("progress");
+      progress.className = "pack-progress";
+      progress.max = Math.max(pack.total_quantity || 1, 1);
+      progress.value = Math.max(0, Math.min(pack.remaining_quantity || 0, progress.max));
+      const qty = document.createElement("span");
+      qty.className = "pack-qty";
+      qty.textContent = `${pack.remaining_text} / ${pack.total_text}`;
+      progressRow.append(progress, qty);
+      card.append(progressRow);
+      list.append(card);
+    }
+    packSection.append(list);
+  }
+  children.push(packSection);
+
+  const spendSection = document.createElement("div");
+  const spendTitle = document.createElement("p");
+  spendTitle.className = "quota-section-title";
+  const recordedJobs = quotaData?.local_spend?.recorded_jobs || 0;
+  spendTitle.textContent = `本机已记录花费（${recordedJobs} 个任务）`;
+  spendSection.append(spendTitle);
+
+  const grid = document.createElement("div");
+  grid.className = "local-spend-grid";
+  const spend = quotaData?.local_spend || {};
+  for (const [label, val] of [
+    ["今日花费", spend.today?.label || "暂无记录"],
+    ["累计总花费", spend.total?.label || "暂无记录"],
+    ["图生图累计", spend.image?.label || "—"],
+    ["图生视频累计", spend.video?.label || "—"],
+  ]) {
+    const stat = document.createElement("div");
+    stat.className = "spend-stat";
+    const sLabel = document.createElement("span");
+    sLabel.className = "spend-stat-label";
+    sLabel.textContent = label;
+    const sValue = document.createElement("span");
+    sValue.className = "spend-stat-value";
+    sValue.textContent = val;
+    stat.append(sLabel, sValue);
+    grid.append(stat);
+  }
+  spendSection.append(grid);
+  children.push(spendSection);
+
+  body.replaceChildren(...children);
+  const syncText = quotaData?.fetched_at
+    ? `上次同步 ${formatClock(quotaData.fetched_at)}${quotaData.cached ? "（缓存）" : ""} · `
+    : "";
+  foot.textContent = `${syncText}余量数据来自可灵 /account/costs，官方统计可能存在延迟`;
+}
+
+async function loadQuota(forceRefresh = false) {
+  if (loadingQuota) return;
+  loadingQuota = true;
+  renderQuota();
+  try {
+    quotaData = await api(`/api/account/quota${forceRefresh ? "?refresh=true" : ""}`);
+    if (forceRefresh) {
+      if (quotaData.available) showToast("可灵剩余额度已更新");
+      else if (quotaData.error) showToast(quotaData.error, "warn");
+    }
+  } catch (error) {
+    if (forceRefresh) showToast(`刷新额度失败：${error.message}`, "error");
+  } finally {
+    loadingQuota = false;
+    renderQuota();
+  }
 }
 
 function formatDuration(ms) {
@@ -837,12 +1149,66 @@ function render() {
   $("#status-title").textContent = titles[status] || (config.busy ? "本机正在处理其他任务" :
     isVideo ? "等待生成视频" : "等待生成待机图");
   const providerId = output?.attempt?.provider_id;
-  $("#status-detail").textContent = [currentJob?.error, providerId && `任务 ID · ${providerId}`].filter(Boolean).join(" · ");
+  const detailCost = ["complete", "failed"].includes(status) ? (output?.attempt?.cost || output?.current_cost) : null;
+  $("#status-detail").textContent = [
+    currentJob?.error,
+    providerId && `任务 ID · ${providerId}`,
+    detailCost && `花费 ${detailCost.label}`,
+  ].filter(Boolean).join(" · ");
   $("#status-dot").className = `status-dot ${running ? "running" : status || ""}`;
   updateStatusTimer();
   $("#retry").hidden = status !== "failed";
   $("#review").hidden = status !== "needs_review";
   for (const id of ["retry", "bind-task", "not-created"]) $("#" + id).disabled = running || !config.configured;
+
+  const costChip = $("#cost-chip");
+  if (costChip) {
+    const currentCost = output?.current_cost;
+    const totalCost = output?.total_cost;
+    const attemptCost = output?.attempt?.cost;
+    costChip.title = "";
+    if (!currentJob) {
+      costChip.hidden = true;
+    } else if (["queued", "running", "needs_review"].includes(status)) {
+      costChip.hidden = !totalCost;
+      if (totalCost) {
+        costChip.className = "cost-chip muted";
+        costChip.textContent = `此前累计 ${totalCost.label}`;
+      }
+    } else if (status === "failed") {
+      const shown = attemptCost || totalCost;
+      costChip.hidden = !shown;
+      if (shown) {
+        costChip.className = "cost-chip muted";
+        costChip.textContent = `${attemptCost ? "本次花费" : "累计花费"} ${shown.label}`;
+      }
+    } else if (status === "complete") {
+      costChip.hidden = false;
+      if (currentCost) {
+        costChip.className = "cost-chip";
+        if (totalCost && (output?.attempt_count || 1) > 1 && totalCost.label !== currentCost.label) {
+          costChip.textContent = `花费 ${currentCost.label} · 累计 ${totalCost.label}`;
+        } else {
+          costChip.textContent = `花费 ${currentCost.label}`;
+        }
+      } else if (totalCost) {
+        costChip.className = "cost-chip";
+        costChip.textContent = `累计花费 ${totalCost.label}`;
+      } else {
+        costChip.className = "cost-chip muted";
+        costChip.textContent = "未记录花费";
+        costChip.title = "早期任务或可灵接口未返回扣费字段";
+      }
+    } else {
+      costChip.hidden = true;
+    }
+  }
+  const jobCostDetail = $("#job-cost-detail");
+  if (jobCostDetail) {
+    const detailText = formatCostDetail(output, status);
+    jobCostDetail.textContent = detailText;
+    jobCostDetail.hidden = !detailText;
+  }
 
   const media = $(".media-box img, .media-box video");
   const mediaBox = $("#media-box");
@@ -976,6 +1342,15 @@ function render() {
       options.frame_mode === "first_last" ? "首尾帧" : "仅首帧",
     ].filter(Boolean).join(" · ") : "";
     $("#loop-note").hidden = !hasOutput;
+    const videoCreditNote = $("#video-credit-note");
+    if (videoCreditNote) {
+      const refCost = matchingReferenceCost();
+      const dur = $("#video-duration").value;
+      const res = $("#video-resolution").value === "4k" ? "4K" : $("#video-resolution").value;
+      videoCreditNote.textContent = refCost
+        ? `即将生成 ${dur} 秒 ${res} 视频 · 同配置上次花费 ${refCost}`
+        : `每次提交生成 ${dur} 秒 ${res} 视频 · 完成后显示本次花费`;
+    }
     videoInspection.show(output?.url, videoPresets()[currentJob?.preset]);
   } else {
     const limit = imageSpec?.max_photos || config.max_image_references;
@@ -1008,8 +1383,11 @@ function render() {
         `已选 ${referenceDraft.length} / ${limit} 张` : "";
 
     $("#style-settings").hidden = !!imageSpec;
-    $("#image-credit-note").textContent = imageSpec ? "每次提交按可灵账户额度生成 1 张图片" :
-      `每张原图单独提交生成 · 并发最多 ${config.image_batch_concurrency || 3} 张`;
+    const refImageCost = matchingReferenceCost();
+    $("#image-credit-note").textContent = imageSpec
+      ? (refImageCost ? `每次提交生成 1 张图片 · 同配置上次花费 ${refImageCost}` : "每次提交按可灵账户额度生成 1 张图片 · 完成后显示花费")
+      : (refImageCost ? `每张单独生成（并发 ≤ ${config.image_batch_concurrency || 3}）· 单张参考花费 ${refImageCost}` :
+        `每张原图单独提交生成 · 并发最多 ${config.image_batch_concurrency || 3} 张 · 完成后逐张显示花费`);
     $("#style-photo").disabled = running || !limit;
     $("#clear-style").hidden = !styleDraft;
     $("#clear-style").disabled = running;
@@ -1053,6 +1431,7 @@ function render() {
       $("#use-idle").href = `/image-to-video?source=${currentJob.id}:${output.version}${preset ? `&preset=${preset}` : ""}`;
     }
   }
+  renderQuota();
 }
 
 /** 显示整批图片进度与缩略图，点击任意一项可查看该任务详情。 */
@@ -1060,8 +1439,10 @@ function renderBatch() {
   $("#image-batch").hidden = batchJobs.length <= 1;
   const complete = batchJobs.filter((job) => job.status === "complete").length;
   const failed = batchJobs.filter((job) => job.status === "failed" || job.status === "needs_review").length;
+  const batchSpend = sumCostObjects(batchJobs.map((job) => job.stages?.idle?.total_cost || job.stages?.idle?.current_cost));
   $("#batch-summary").textContent = `已完成 ${complete} / ${batchJobs.length}` +
-    (failed ? ` · ${failed} 待处理` : "");
+    (failed ? ` · ${failed} 待处理` : "") +
+    (batchSpend ? ` · 本批花费 ${batchSpend.label}` : "");
   $("#batch-results").replaceChildren(...batchJobs.map((job) => {
     const item = document.createElement("li");
     const button = document.createElement("button");
@@ -1073,7 +1454,8 @@ function renderBatch() {
     image.alt = "";
     image.loading = "lazy";
     const label = document.createElement("span");
-    label.textContent = `#${job.batch_index} · ${statusLabels[job.status] || job.status}`;
+    const jobCost = job.stages?.idle?.total_cost?.label || job.stages?.idle?.current_cost?.label;
+    label.textContent = `#${job.batch_index} · ${statusLabels[job.status] || job.status}${jobCost ? ` · ${jobCost}` : ""}`;
     button.append(image, label);
     button.addEventListener("click", () => {
       if (requesting) return;
@@ -1110,12 +1492,15 @@ function setJob(job) {
 
 async function loadHistory() {
   const {jobs} = await api(`/api/jobs?kind=${kind}`);
+  recentJobs = jobs;
   const select = $("#history");
   select.replaceChildren(new Option(jobs.length ? `历史记录 (${jobs.length})` : "暂无记录", ""));
   for (const job of jobs) {
     const index = job.batch_index ? ` · #${job.batch_index}` : "";
     const title = presetLabel(job.preset);
-    select.add(new Option(`${dateLabel(job.created_at)} · ${statusLabels[job.status] || job.status}${index} · ${title || job.id.slice(0, 6)}`, job.id));
+    const costText = job.stages?.[stage]?.total_cost?.label || job.stages?.[stage]?.current_cost?.label;
+    const costSuffix = costText ? ` · ${costText}` : "";
+    select.add(new Option(`${dateLabel(job.created_at)} · ${statusLabels[job.status] || job.status}${index} · ${title || job.id.slice(0, 6)}${costSuffix}`, job.id));
   }
   select.value = currentJob?.id || "";
   return jobs;
@@ -1405,32 +1790,66 @@ async function poll() {
   try {
     const nextConfig = await api("/api/config");
     if (version !== selectionVersion || requesting) return;
+    const wasBusy = config.busy;
     config = nextConfig;
+    let shouldRefreshQuota = wasBusy && !nextConfig.busy;
     if (currentJob?.batch_id && (config.busy || batchJobs.some((job) => ["queued", "running"].includes(job.status)))) {
       const jobs = await loadBatch(currentJob);
       if (version !== selectionVersion || requesting) return;
       const changed = jobs.some((job, index) => job.updated_at !== batchJobs[index]?.updated_at);
       if (changed) {
+        const hasFinishedNew = jobs.some((job, index) =>
+          ["queued", "running"].includes(batchJobs[index]?.status) && !["queued", "running"].includes(job.status)
+        );
         batchJobs = jobs;
         currentJob = jobs.find((job) => job.id === currentJob.id);
         renderBatch();
         await loadHistory();
+        if (hasFinishedNew) shouldRefreshQuota = true;
       }
     } else if (currentJob && ["queued", "running"].includes(currentJob.status)) {
       const job = await api(`/api/jobs/${currentJob.id}`);
       if (version !== selectionVersion || requesting) return;
       const changed = job.status !== currentJob.status;
       currentJob = job;
-      if (changed) await loadHistory();
+      if (changed) {
+        await loadHistory();
+        if (!["queued", "running"].includes(job.status)) shouldRefreshQuota = true;
+      }
     }
     render();
+    if (shouldRefreshQuota) loadQuota();
   } catch (error) { showError(`无法连接本机服务：${error.message}`); }
   finally { polling = false; }
 }
 
+$("#quota-pill")?.addEventListener("click", () => {
+  quotaPopoverOpen = !quotaPopoverOpen;
+  renderQuota();
+});
+$("#quota-close")?.addEventListener("click", () => {
+  quotaPopoverOpen = false;
+  renderQuota();
+});
+$("#quota-refresh")?.addEventListener("click", () => loadQuota(true));
+document.addEventListener("click", (event) => {
+  if (quotaPopoverOpen && !$("#quota-widget")?.contains(event.target)) {
+    quotaPopoverOpen = false;
+    renderQuota();
+  }
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && quotaPopoverOpen) {
+    quotaPopoverOpen = false;
+    renderQuota();
+  }
+});
+
 async function init() {
   try {
     config = await api("/api/config");
+    renderQuota();
+    loadQuota();
     try {
       const {presets} = await api(promptPresetsURL);
       savedPrompts = Object.assign(Object.create(null), presets);

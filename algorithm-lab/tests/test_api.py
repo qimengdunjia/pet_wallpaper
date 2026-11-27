@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from app.billing import extract_task_cost
 from app.config import Settings
 from app.kling import RemoteTask
 from app.main import create_app
@@ -448,3 +449,47 @@ def test_omni_video_saves_reference_images_for_redo_and_rejects_invalid_inputs(t
         assert job["stages"]["video"]["version"] == 2
         assert provider.direct_video[1] == [first, first, ref]
         assert provider.submitted == ["video", "video"]
+
+
+def test_quota_endpoint_and_per_generation_costs(tmp_path):
+    """验证剩余额度接口、无密钥降级以及每次图生图/图生视频的花费统计。"""
+    with TestClient(create_app(Settings(data_dir=tmp_path / "no-key"), FakeProvider())) as client:
+        quota = client.get("/api/account/quota").json()
+        assert quota["configured"] is False
+        assert quota["available"] is False
+        assert quota["local_spend"]["total"] is None
+
+    provider = FakeProvider()
+    provider.packs = [{
+        "id": "pack-1", "name": "可灵通用包", "type": "decreasing_total", "tier": "flagship",
+        "applicable_models": "Kling 4.0 & Image 3.0", "category": "general",
+        "total_quantity": 200.0, "remaining_quantity": 180.0,
+        "total_text": "200", "remaining_text": "180", "status": "online",
+    }]
+    provider.cost_by_stage = {
+        "idle": extract_task_cost({"final_unit_deduction": "8"}),
+        "video": extract_task_cost({"billing": [
+            {"charge_type": "unit", "amount": "4", "package_type": "video"},
+            {"charge_type": "cash", "cash_type": "balance", "amount": "0.50", "currency": "CNY"},
+        ]}),
+    }
+    with TestClient(create_app(Settings(api_key="test-only", data_dir=tmp_path / "with-key", poll_seconds=.001), provider)) as client:
+        initial = client.get("/api/account/quota").json()
+        assert initial["configured"] is True
+        assert initial["available"] is True
+        assert initial["online_packs"][0]["remaining_text"] == "180"
+
+        img_resp = client.post("/api/image-jobs", files={"file": ("cat.jpg", photo())}, data={"prompt": "待机"})
+        img_job = completed(client, img_resp.json()["id"])
+        assert img_job["stages"]["idle"]["current_cost"]["label"] == "8 Units"
+        assert img_job["stages"]["idle"]["total_cost"]["label"] == "8 Units"
+
+        vid_resp = client.post("/api/video-jobs", files={"file": ("cat.jpg", photo())}, data={"prompt": "眨眼"})
+        vid_job = completed(client, vid_resp.json()["id"])
+        assert vid_job["stages"]["video"]["current_cost"]["label"] == "4 Units + ¥0.50"
+
+        summary = client.get("/api/account/quota").json()["local_spend"]
+        assert summary["image"]["label"] == "8 Units"
+        assert summary["video"]["label"] == "4 Units + ¥0.50"
+        assert summary["total"]["label"] == "12 Units + ¥0.50"
+        assert summary["recorded_jobs"] == 2

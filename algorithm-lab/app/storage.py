@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from .billing import aggregate_costs
 from .image import DEFAULT_IMAGE_OPTIONS
 
 LABELS = {"idle": "待机图", "video": "动作视频"}
@@ -152,12 +153,15 @@ class JobStore:
         for key, stage in job["stages"].items():
             current = next((a for a in stage["attempts"] if a["number"] == stage["current"]), None)
             output = current.get("output") if current else None
+            attempt_costs = [a.get("cost") for a in stage["attempts"] if a.get("cost")]
             stages[key] = {
                 "label": LABELS[key], "state": stage["state"], "stale": stage["stale"],
                 "version": stage["current"], "url": local_url(output["file"]) if output else None,
                 "attempt_count": len(stage["attempts"]),
+                "current_cost": current.get("cost") if current else None,
+                "total_cost": aggregate_costs(attempt_costs),
                 "attempt": {k: stage["attempts"][-1].get(k) for k in
-                            ("number", "state", "provider_id", "inputs", "error", "resumable")}
+                            ("number", "state", "provider_id", "inputs", "error", "resumable", "cost")}
                 if stage["attempts"] else None,
             }
         return {

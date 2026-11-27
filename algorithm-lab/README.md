@@ -56,6 +56,7 @@ bash scripts/run.sh
 | 方法与路径 | 用途 |
 | --- | --- |
 | `GET /api/config` | 本机服务状态、默认提示词和视频模型参数 |
+| `GET /api/account/quota` | 查询可灵账户资源包余量（`?refresh=true` 主动刷新）与本机累计花费统计 |
 | `POST /api/image-batches` | 上传 1～10 个主体 `file`，每张建立独立任务，可共用一张 `style` 姿态风格图和同一组 `prompt`、`image_options` |
 | `GET /api/image-batches/{id}` | 按上传顺序查看同批任务的进度和成品 |
 | `POST /api/image-jobs` | 建立单个生成任务，可选 `preset`、`prompt` 和 `image_options`。普通 3.0 收一张原图，Omni 和 O1 可收有序参考图 |

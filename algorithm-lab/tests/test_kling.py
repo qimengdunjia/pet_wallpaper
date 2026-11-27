@@ -194,3 +194,122 @@ def test_omni_video_references_and_legacy_query(tmp_path, frame_mode):
 
     asyncio.run(scenario())
     assert len(calls) == 2
+
+
+def test_query_extracts_cost_and_account_costs(tmp_path):
+    """核验不同接口扣费字段解析（不重复计数）以及 /account/costs 资源包余量查询。"""
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if request.url.path == "/v1/images/omni-image/img-1":
+            return httpx.Response(200, json={
+                "code": 0,
+                "data": {
+                    "task_status": "succeed",
+                    "task_result": {"images": [{"url": "https://cdn.example/img.png"}]},
+                    "final_unit_deduction": "8",
+                },
+            })
+        if request.url.path == "/tasks":
+            return httpx.Response(200, json={
+                "code": 0,
+                "data": [{
+                    "id": "vid-1",
+                    "status": "succeeded",
+                    "outputs": [{"type": "video", "url": "https://cdn.example/vid.mp4"}],
+                    "billing": [
+                        {"charge_type": "unit", "amount": "6", "package_type": "video"},
+                        {"charge_type": "cash", "cash_type": "balance", "amount": "1.20", "currency": "CNY", "list_price": "1.50"},
+                    ],
+                    "final_unit_deduction": "6",
+                    "usage": {"input_duration": 0, "output_duration": 4},
+                }],
+            })
+        if request.url.path == "/v1/videos/omni-video/vid-fail":
+            return httpx.Response(200, json={
+                "code": 0,
+                "data": {
+                    "task_status": "failed",
+                    "task_status_msg": "生成失败",
+                    "final_unit_deduction": "0",
+                },
+            })
+        if request.url.path == "/account/costs":
+            return httpx.Response(200, json={
+                "code": 0,
+                "data": {
+                    "code": 0,
+                    "resource_pack_subscribe_infos": [
+                        {
+                            "resource_pack_name": "视频生成资源包",
+                            "resource_pack_id": "pack-v",
+                            "resource_pack_type": "decreasing_total",
+                            "resource_pack_tier": "flagship",
+                            "resource_pack_applicable_models": "Kling 4.0",
+                            "total_quantity": 200.0,
+                            "remaining_quantity": 118.5,
+                            "invalid_time": 1800000000000,
+                            "status": "online",
+                        },
+                        {
+                            "resource_pack_name": "图片资源包",
+                            "resource_pack_id": "pack-i",
+                            "resource_pack_type": "decreasing_total",
+                            "resource_pack_tier": "general",
+                            "resource_pack_applicable_models": "Image 3.0 Omni",
+                            "total_quantity": 100.0,
+                            "remaining_quantity": 0.0,
+                            "status": "runOut",
+                        },
+                    ],
+                },
+            })
+        raise AssertionError(f"unexpected path: {request.url.path}")
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = KlingProvider(Settings(api_key="secret-test"), client)
+            img_task = await provider.query("idle", "img-1")
+            assert img_task.cost["unit_amount"] == "8"
+            assert img_task.cost["label"] == "8 Units"
+
+            vid_task = await provider.query("video", "vid-1")
+            assert vid_task.cost["unit_amount"] == "6"
+            assert vid_task.cost["cash_amounts"] == {"CNY": "1.2"}
+            assert vid_task.cost["list_price_amounts"] == {"CNY": "1.5"}
+            assert vid_task.cost["usage"] == {"input_duration": "0", "output_duration": "4"}
+            assert vid_task.cost["label"] == "6 Units + ¥1.20"
+
+            fail_task = await provider.query("video", "vid-fail", video_model="kling-3.0-omni")
+            assert fail_task.state == "failed"
+            assert fail_task.cost["is_zero"] is True
+            assert fail_task.cost["label"] == "0（未扣费）"
+
+            packs = await provider.account_costs(start_time=1000, end_time=2000)
+            assert len(packs) == 2
+            assert packs[0]["category"] == "video"
+            assert packs[0]["remaining_text"] == "118.5"
+            assert packs[0]["total_text"] == "200"
+            assert packs[0]["status"] == "online"
+            assert packs[1]["category"] == "image"
+            assert requests[-1].url.params["start_time"] == "1000"
+            assert requests[-1].url.params["end_time"] == "2000"
+            assert all(r.headers["authorization"] == "Bearer secret-test" for r in requests)
+
+    asyncio.run(scenario())
+
+
+def test_account_costs_handles_nested_error():
+    """核验 /account/costs 返回业务错误码时抛出可识别异常。"""
+
+    def handler(request):
+        return httpx.Response(200, json={"code": 0, "data": {"code": 1102, "msg": "permission denied"}})
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = KlingProvider(Settings(api_key="test"), client)
+            with pytest.raises(ProviderError, match="1102"):
+                await provider.account_costs()
+
+    asyncio.run(scenario())

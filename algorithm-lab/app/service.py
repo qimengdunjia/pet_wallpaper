@@ -5,8 +5,10 @@ import fcntl
 import logging
 import time
 import uuid
+from datetime import datetime
 from shutil import copyfile, rmtree
 
+from .billing import aggregate_costs
 from .config import Settings
 from .image import DEFAULT_IMAGE_OPTIONS, MAX_IMAGE_REFERENCES, ImageOptions
 from .kling import KlingProvider, ProviderError, SubmissionUnknown
@@ -15,6 +17,8 @@ from .video import DEFAULT_VIDEO_OPTIONS, VideoOptions
 
 
 IMAGE_BATCH_CONCURRENCY = 3  # 同批最多同时执行的独立图片任务数。
+QUOTA_CACHE_TTL = 60.0  # 额度接口结果本机缓存时长，避免频繁请求。
+QUOTA_MIN_INTERVAL = 2.0  # 遵守可灵 /account/costs 接口 QPS <= 1 限制。
 logger = logging.getLogger(__name__)
 
 
@@ -33,6 +37,105 @@ class JobService:
         self.active_id: str | None = None
         self.mutation_lock = asyncio.Lock()  # 串行化创建、重做及继续请求。
         self.process_lock = None  # 跨进程锁，禁止多个 worker 同时管理 JSON。
+        self._quota_lock = asyncio.Lock()
+        self._quota_cache: dict | None = None
+        self._quota_fetched_at: float = 0.0
+        self._quota_last_attempt_at: float = 0.0
+        self._quota_stale: bool = True
+
+    def invalidate_quota_cache(self) -> None:
+        """标记额度缓存失效；无参数，无返回值，下次读取时向可灵刷新。"""
+        self._quota_stale = True
+
+    def local_spend_summary(self) -> dict:
+        """汇总本机历史记录中的生成花费；无参数，返回总计、今日及分类汇总。"""
+        local_today = datetime.now().astimezone().date()
+        all_costs, today_costs, image_costs, video_costs = [], [], [], []
+        recorded_jobs = 0
+        recorded_attempts = 0
+        for job in self.store.all():
+            job_has_cost = False
+            for stage in job.get("stages", {}).values():
+                for attempt in stage.get("attempts", []):
+                    cost = attempt.get("cost")
+                    if not isinstance(cost, dict):
+                        continue
+                    job_has_cost = True
+                    recorded_attempts += 1
+                    all_costs.append(cost)
+                    if job.get("kind") == "image":
+                        image_costs.append(cost)
+                    elif job.get("kind") == "video":
+                        video_costs.append(cost)
+                    stamp = attempt.get("finished_at") or attempt.get("created_at")
+                    if isinstance(stamp, str):
+                        try:
+                            if datetime.fromisoformat(stamp).astimezone().date() == local_today:
+                                today_costs.append(cost)
+                        except ValueError:
+                            pass
+            if job_has_cost:
+                recorded_jobs += 1
+        return {
+            "total": aggregate_costs(all_costs),
+            "today": aggregate_costs(today_costs),
+            "image": aggregate_costs(image_costs),
+            "video": aggregate_costs(video_costs),
+            "recorded_jobs": recorded_jobs,
+            "recorded_attempts": recorded_attempts,
+        }
+
+    async def get_quota(self, *, force_refresh: bool = False) -> dict:
+        """获取可灵账户剩余资源包额度与本机累计花费；参数 force_refresh 控制是否主动刷新。"""
+        local_spend = self.local_spend_summary()
+        if not self.settings.api_key:
+            return {
+                "configured": False, "available": False, "packs": [], "online_packs": [],
+                "error": None, "fetched_at": None, "cached": False, "local_spend": local_spend,
+            }
+        if not hasattr(self.provider, "account_costs"):
+            return {
+                "configured": True, "available": False, "packs": [], "online_packs": [],
+                "error": "当前供应商不支持额度查询", "fetched_at": None, "cached": False, "local_spend": local_spend,
+            }
+        async with self._quota_lock:
+            now_mono = time.monotonic()
+            cache_valid = (
+                self._quota_cache is not None
+                and not force_refresh
+                and not self._quota_stale
+                and (now_mono - self._quota_fetched_at) < QUOTA_CACHE_TTL
+            )
+            throttled = self._quota_cache is not None and (now_mono - self._quota_last_attempt_at) < QUOTA_MIN_INTERVAL
+            if cache_valid or throttled:
+                return {**self._quota_cache, "local_spend": local_spend, "cached": True}
+            self._quota_last_attempt_at = now_mono
+            try:
+                packs = await self.provider.account_costs()
+            except ProviderError as exc:
+                return {
+                    "configured": True,
+                    "available": False,
+                    "packs": self._quota_cache["packs"] if self._quota_cache else [],
+                    "online_packs": self._quota_cache["online_packs"] if self._quota_cache else [],
+                    "error": str(exc),
+                    "fetched_at": self._quota_cache["fetched_at"] if self._quota_cache else None,
+                    "cached": False,
+                    "local_spend": local_spend,
+                }
+            online_packs = [pack for pack in packs if pack.get("status") == "online"]
+            payload = {
+                "configured": True,
+                "available": True,
+                "packs": packs,
+                "online_packs": online_packs,
+                "error": None,
+                "fetched_at": now(),
+            }
+            self._quota_cache = payload
+            self._quota_fetched_at = time.monotonic()
+            self._quota_stale = False
+            return {**payload, "local_spend": local_spend, "cached": False}
 
     @property
     def busy(self) -> bool:
@@ -355,8 +458,12 @@ class JobService:
                 await asyncio.sleep(self.settings.poll_seconds)
                 continue
             if remote.state == "failed":
+                if getattr(remote, "cost", None) is not None:
+                    attempt["cost"] = remote.cost
                 raise ProviderError(remote.message)
             if remote.state == "complete":
+                if getattr(remote, "cost", None) is not None:
+                    attempt["cost"] = remote.cost
                 target = self.store.directory(job["id"], job["kind"]) / f"{key}-v{attempt['number']}"
                 attempt["output"] = await self.provider.download(key, remote.url, target)
                 attempt.update(state="complete", finished_at=now(), error=None, resumable=False)
@@ -364,6 +471,7 @@ class JobService:
                 if key in job.get("pending_stages", []):
                     job["pending_stages"].remove(key)
                 self.store.save(job)
+                self.invalidate_quota_cache()
                 return
             await asyncio.sleep(self.settings.poll_seconds)
         raise ProviderError("查询已到本机等待时限；重试将继续查询当前任务，不会重新付费生成", True)

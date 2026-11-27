@@ -6,6 +6,7 @@ import io
 import pytest
 from PIL import Image
 
+from app.billing import extract_task_cost
 from app.config import Settings
 from app.kling import ProviderError, RemoteTask, SubmissionUnknown
 from app.service import JobConflict, JobService
@@ -34,9 +35,21 @@ class FakeProvider:
         self.unknown = False
         self.block = False
         self.queried = asyncio.Event()
+        self.cost_by_stage = {}
+        self.fail_cost = None
+        self.packs = []
+        self.quota_error = None
+        self.quota_calls = 0
 
     async def close(self):
         """关闭测试替身；无参数，无返回值。"""
+
+    async def account_costs(self, *, start_time=None, end_time=None):
+        """返回模拟资源包余量；可配置异常或计数。"""
+        self.quota_calls += 1
+        if self.quota_error:
+            raise ProviderError(self.quota_error, True)
+        return self.packs
 
     async def submit(self, stage, references, external_id, *, video_options=None, video_prompt=None,
                      image_prompt=None, image_options=None):
@@ -60,8 +73,8 @@ class FakeProvider:
             await asyncio.Event().wait()
         if stage == self.fail_stage:
             self.fail_stage = None
-            return RemoteTask("failed", message="模拟生成失败")
-        return RemoteTask("complete", f"https://cdn.example/{stage}-{task_id}")
+            return RemoteTask("failed", message="模拟生成失败", cost=self.fail_cost)
+        return RemoteTask("complete", f"https://cdn.example/{stage}-{task_id}", cost=self.cost_by_stage.get(stage))
 
     async def download(self, stage, url, target):
         """写入测试媒体；参数同真实下载，返回登记信息，绝不调用生成 API。"""
@@ -256,3 +269,60 @@ def test_photo_validation_and_exif_removal():
     image.save(output, format="JPEG", exif=exif)
     normalized = Image.open(io.BytesIO(normalize_photo(output.getvalue())))
     assert normalized.size == (400, 600) and not normalized.getexif()
+
+
+def test_cost_persists_across_retries_and_quota_caching(tmp_path):
+    """验证失败零扣费与成功多次重做花费累加，以及额度查询缓存与失效刷新。"""
+    async def scenario():
+        provider = FakeProvider()
+        provider.fail_stage = "idle"
+        provider.fail_cost = extract_task_cost({"final_unit_deduction": "0"})
+        provider.cost_by_stage["idle"] = extract_task_cost({"final_unit_deduction": "8"})
+        provider.packs = [{
+            "id": "p1", "name": "图片包", "type": "decreasing_total", "tier": "general",
+            "applicable_models": "Image 3.0 Omni", "category": "image",
+            "total_quantity": 100.0, "remaining_quantity": 92.0,
+            "total_text": "100", "remaining_text": "92", "status": "online",
+        }]
+        service, _ = make_service(tmp_path, provider)
+        await service.start()
+
+        first_quota = await service.get_quota()
+        assert first_quota["available"] is True
+        assert provider.quota_calls == 1
+        second_quota = await service.get_quota()
+        assert second_quota["cached"] is True
+        assert provider.quota_calls == 1
+
+        job = await service.create(photo(), image_prompt="室内待机")
+        await service.task
+        failed_public = service.store.public(service.store.load(job["id"]))
+        assert failed_public["stages"]["idle"]["attempt"]["cost"]["label"] == "0（未扣费）"
+        assert failed_public["stages"]["idle"]["current_cost"] is None
+
+        await service.retry(job["id"], "idle")
+        await service.task
+        await service.retry(job["id"], "idle")
+        await service.task
+        done_public = service.store.public(service.store.load(job["id"]))
+        assert done_public["stages"]["idle"]["current_cost"]["label"] == "8 Units"
+        assert done_public["stages"]["idle"]["total_cost"]["label"] == "16 Units"
+
+        # 任务完成后缓存被置为失效，并在超过节流窗口后重新请求远端。
+        service._quota_last_attempt_at = 0.0
+        after_quota = await service.get_quota()
+        assert provider.quota_calls == 2
+        assert after_quota["local_spend"]["total"]["label"] == "16 Units"
+        assert after_quota["local_spend"]["today"]["label"] == "16 Units"
+        assert after_quota["local_spend"]["recorded_jobs"] == 1
+
+        provider.quota_error = "网络异常"
+        service._quota_last_attempt_at = 0.0
+        errored = await service.get_quota(force_refresh=True)
+        assert errored["available"] is False
+        assert errored["error"] == "网络异常"
+        assert len(errored["online_packs"]) == 1
+        assert errored["local_spend"]["total"]["label"] == "16 Units"
+        await service.close()
+
+    asyncio.run(scenario())
